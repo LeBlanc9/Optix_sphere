@@ -2,6 +2,7 @@
 #include <iostream>
 #include <iomanip>
 #include <cmath>
+#include <string>
 
 TheoryResult TheoryCalculator::calculateIdealSphere(
     float radius,

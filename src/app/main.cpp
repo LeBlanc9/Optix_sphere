@@ -44,7 +44,7 @@ int main() {
         scene.build_ideal_sphere(sphere_geom);
 
         // 4. Setup and run the simulation
-        PathTracer tracer(context, scene, "sphere.ptx");
+        PathTracer tracer(context, scene, "forward_tracer.ptx");
         SimulationResult sim_result = tracer.launch(config, light, detector);
 
         // 5. Calculate theoretical solution and compare

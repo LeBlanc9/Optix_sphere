@@ -42,6 +42,7 @@ private:
 
     OptixModule module_ = nullptr;
     OptixPipeline pipeline_ = nullptr;
+    OptixPipelineCompileOptions pipeline_compile_options_ = {};
     
     // Program groups
     OptixProgramGroup raygen_pg_ = nullptr;
