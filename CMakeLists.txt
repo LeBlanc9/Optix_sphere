@@ -5,12 +5,13 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-# Disable AVX-512 for WSL compatibility
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mno-avx512f -mno-avx512dq -mno-avx512cd -mno-avx512bw")
-set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Xcompiler=-mno-avx512f -Xcompiler=-mno-avx512dq -Xcompiler=-mno-avx512cd -Xcompiler=-mno-avx512bw")
 
 # OptiX 路径
-set(OptiX_INSTALL_DIR "${CMAKE_SOURCE_DIR}/../NVIDIA-OptiX-SDK-9.0.0-linux64-x86_64")
+if(WIN32)
+    set(OptiX_INSTALL_DIR "C:/ProgramData/NVIDIA Corporation/OptiX SDK 9.0.0")
+else()
+    set(OptiX_INSTALL_DIR "${CMAKE_SOURCE_DIR}/../NVIDIA-OptiX-SDK-9.0.0-linux64-x86_64")
+endif()
 set(OptiX_INCLUDE "${OptiX_INSTALL_DIR}/include")
 
 # CUDA
@@ -86,6 +87,14 @@ target_link_libraries(ideal_sphere_sim PRIVATE
     CUDA::cudart
 )
 
+# 复制 PTX 文件到可执行文件目录
+add_custom_command(TARGET ideal_sphere_sim POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        ${CMAKE_CURRENT_BINARY_DIR}/forward_tracer.ptx
+        $<TARGET_FILE_DIR:ideal_sphere_sim>/forward_tracer.ptx
+    COMMENT "Copying PTX file to executable directory"
+)
+
 # Google Test 单元测试
 add_executable(unit_tests
     tests/test_theory.cpp
@@ -103,7 +112,9 @@ target_link_libraries(unit_tests PRIVATE
 
 # 注册测试
 include(GoogleTest)
-gtest_discover_tests(unit_tests)
+# 禁用自动测试发现以避免 Windows 上的 DLL 依赖问题
+# gtest_discover_tests(unit_tests)
+gtest_add_tests(TARGET unit_tests)
 
 message(STATUS "")
 message(STATUS "Build: cd build && cmake .. && make")

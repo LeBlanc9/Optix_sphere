@@ -1,6 +1,11 @@
 #include <optix.h>
 #include "device_params.h"
 
+// 定义数学常量
+#ifndef M_PIf
+#define M_PIf 3.14159265358979323846f
+#endif
+
 // Launch params (passed from CPU)
 extern "C" {
     __constant__ DeviceParams params;
@@ -70,7 +75,9 @@ extern "C" __global__ void __intersection__sphere() {
 // 最近命中程序
 extern "C" __global__ void __closesthit__sphere() {
     const SphereSbtData* sphere = (SphereSbtData*)optixGetSbtDataPointer();
-    RayPayload* payload = (RayPayload*)optixGetPayload_0();
+    unsigned long long payload_ptr = static_cast<unsigned long long>(optixGetPayload_0()) | 
+                                     (static_cast<unsigned long long>(optixGetPayload_1()) << 32);
+    RayPayload* payload = reinterpret_cast<RayPayload*>(payload_ptr);
 
     // 1. 计算命中点和法线
     float t_hit = optixGetRayTmax();
@@ -117,7 +124,9 @@ extern "C" __global__ void __closesthit__sphere() {
 
 // Miss 程序（光线逃逸）
 extern "C" __global__ void __miss__sphere() {
-    RayPayload* payload = (RayPayload*)optixGetPayload_0();
+    unsigned long long payload_ptr = static_cast<unsigned long long>(optixGetPayload_0()) | 
+                                     (static_cast<unsigned long long>(optixGetPayload_1()) << 32);
+    RayPayload* payload = reinterpret_cast<RayPayload*>(payload_ptr);
     payload->active = false;
 }
 
@@ -144,7 +153,9 @@ extern "C" __global__ void __raygen__forward_trace() {
 
     // 追踪光线 (循环多次反射)
     for (int i = 0; i < params.max_bounces && payload.active; ++i) {
-        unsigned int p0 = (unsigned int)&payload;
+        unsigned long long payload_ptr = reinterpret_cast<unsigned long long>(&payload);
+        unsigned int p0 = static_cast<unsigned int>(payload_ptr);
+        unsigned int p1 = static_cast<unsigned int>(payload_ptr >> 32);
         optixTrace(
             params.traversable,
             payload.origin, payload.direction,
@@ -152,7 +163,7 @@ extern "C" __global__ void __raygen__forward_trace() {
             OptixVisibilityMask(1),
             OPTIX_RAY_FLAG_NONE,
             0, 1, 0, // SBT offsets
-            p0
+            p0, p1
         );
     }
 

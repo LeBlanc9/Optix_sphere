@@ -5,6 +5,10 @@
 #include <iostream>
 #include <math.h>
 
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
 // Helper to read a file into a string
 static std::string read_file_to_string(const std::string& filename) {
     std::ifstream file(filename);
@@ -48,20 +52,19 @@ void PathTracer::create_module(const std::string& ptx_path) {
     module_compile_options.optLevel = OPTIX_COMPILE_OPTIMIZATION_DEFAULT;
     module_compile_options.debugLevel = OPTIX_COMPILE_DEBUG_LEVEL_MINIMAL;
 
-    OptixPipelineCompileOptions pipeline_compile_options = {};
-    pipeline_compile_options.usesMotionBlur = false;
-    pipeline_compile_options.traversableGraphFlags = OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_GAS;
-    pipeline_compile_options.numPayloadValues = 1; // Using pointer passing
-    pipeline_compile_options.numAttributeValues = 0;
-    pipeline_compile_options.exceptionFlags = OPTIX_EXCEPTION_FLAG_NONE;
-    pipeline_compile_options.pipelineLaunchParamsVariableName = "params";
+    pipeline_compile_options_.usesMotionBlur = false;
+    pipeline_compile_options_.traversableGraphFlags = OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_GAS;
+    pipeline_compile_options_.numPayloadValues = 2; // Using 64-bit pointer passing (2x 32-bit values)
+    pipeline_compile_options_.numAttributeValues = 0;
+    pipeline_compile_options_.exceptionFlags = OPTIX_EXCEPTION_FLAG_NONE;
+    pipeline_compile_options_.pipelineLaunchParamsVariableName = "params";
     
     char log[2048];
     size_t log_size = sizeof(log);
     OPTIX_CHECK(optixModuleCreate(
         context_.get(),
         &module_compile_options,
-        &pipeline_compile_options,
+        &pipeline_compile_options_,
         ptx_code.c_str(),
         ptx_code.size(),
         log,
@@ -116,7 +119,7 @@ void PathTracer::create_pipeline() {
     size_t log_size = sizeof(log);
     OPTIX_CHECK(optixPipelineCreate(
         context_.get(),
-        nullptr, // using pipelineCompileOptions from module creation
+        &pipeline_compile_options_,
         &pipeline_link_options,
         program_groups,
         sizeof(program_groups) / sizeof(program_groups[0]),
@@ -167,12 +170,17 @@ void PathTracer::create_sbt() {
     const DeviceBuffer& sphere_data_buffer = scene_.get_sphere_data_buffer();
     sphere_data_buffer.download(hg_record.data() + OPTIX_SBT_RECORD_HEADER_SIZE, sizeof(SphereSbtData));
 
-    // 4. Upload the complete record to the GPU
+    // 4. Align the record size to OPTIX_SBT_RECORD_ALIGNMENT
+    size_t record_size = hg_record.size();
+    size_t aligned_size = ((record_size + OPTIX_SBT_RECORD_ALIGNMENT - 1) / OPTIX_SBT_RECORD_ALIGNMENT) * OPTIX_SBT_RECORD_ALIGNMENT;
+    hg_record.resize(aligned_size, 0);
+
+    // 5. Upload the complete record to the GPU
     hitgroup_sbt_record_.upload(hg_record.data(), hg_record.size());
 
-    // 5. Point the SBT to the new record
+    // 6. Point the SBT to the new record
     sbt_.hitgroupRecordBase = hitgroup_sbt_record_.get_cu_ptr();
-    sbt_.hitgroupRecordStrideInBytes = hg_record.size();
+    sbt_.hitgroupRecordStrideInBytes = aligned_size;
     sbt_.hitgroupRecordCount = 1;
 
     std::cout << "✅ SBT created" << std::endl;
