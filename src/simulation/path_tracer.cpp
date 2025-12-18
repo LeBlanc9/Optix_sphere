@@ -1,5 +1,6 @@
 #include "path_tracer.h"
 #include "device_params.h"
+#include "constants.h"
 #include <fstream>
 #include <vector>
 #include <iostream>
@@ -39,7 +40,8 @@ PathTracer::~PathTracer() {
     if (pipeline_) optixPipelineDestroy(pipeline_);
     if (raygen_pg_) optixProgramGroupDestroy(raygen_pg_);
     if (miss_pg_) optixProgramGroupDestroy(miss_pg_);
-    if (hitgroup_pg_) optixProgramGroupDestroy(hitgroup_pg_);
+    if (sphere_hitgroup_pg_) optixProgramGroupDestroy(sphere_hitgroup_pg_);
+    if (detector_hitgroup_pg_) optixProgramGroupDestroy(detector_hitgroup_pg_);
     if (module_) optixModuleDestroy(module_);
 }
 
@@ -96,24 +98,34 @@ void PathTracer::create_program_groups() {
     log_size = sizeof(log);
     OPTIX_CHECK(optixProgramGroupCreate(context_.get(), &miss_desc, 1, &pg_options, log, &log_size, &miss_pg_));
 
-    // Hitgroup
-    OptixProgramGroupDesc hitgroup_desc = {};
-    hitgroup_desc.kind = OPTIX_PROGRAM_GROUP_KIND_HITGROUP;
-    hitgroup_desc.hitgroup.moduleCH = module_;
-    hitgroup_desc.hitgroup.entryFunctionNameCH = "__closesthit__sphere";
-    hitgroup_desc.hitgroup.moduleIS = module_;
-    hitgroup_desc.hitgroup.entryFunctionNameIS = "__intersection__sphere";
+    // Hitgroup for sphere
+    OptixProgramGroupDesc sphere_hitgroup_desc = {};
+    sphere_hitgroup_desc.kind = OPTIX_PROGRAM_GROUP_KIND_HITGROUP;
+    sphere_hitgroup_desc.hitgroup.moduleCH = module_;
+    sphere_hitgroup_desc.hitgroup.entryFunctionNameCH = "__closesthit__sphere";
+    sphere_hitgroup_desc.hitgroup.moduleIS = module_;
+    sphere_hitgroup_desc.hitgroup.entryFunctionNameIS = "__intersection__sphere";
     log_size = sizeof(log);
-    OPTIX_CHECK(optixProgramGroupCreate(context_.get(), &hitgroup_desc, 1, &pg_options, log, &log_size, &hitgroup_pg_));
-    
-    std::cout << "✅ Program groups created" << std::endl;
+    OPTIX_CHECK(optixProgramGroupCreate(context_.get(), &sphere_hitgroup_desc, 1, &pg_options, log, &log_size, &sphere_hitgroup_pg_));
+
+    // Hitgroup for detector
+    OptixProgramGroupDesc detector_hitgroup_desc = {};
+    detector_hitgroup_desc.kind = OPTIX_PROGRAM_GROUP_KIND_HITGROUP;
+    detector_hitgroup_desc.hitgroup.moduleCH = module_;
+    detector_hitgroup_desc.hitgroup.entryFunctionNameCH = "__closesthit__detector";
+    detector_hitgroup_desc.hitgroup.moduleIS = module_;
+    detector_hitgroup_desc.hitgroup.entryFunctionNameIS = "__intersection__disk";
+    log_size = sizeof(log);
+    OPTIX_CHECK(optixProgramGroupCreate(context_.get(), &detector_hitgroup_desc, 1, &pg_options, log, &log_size, &detector_hitgroup_pg_));
+
+    std::cout << "✅ Program groups created (raygen, miss, sphere, detector)" << std::endl;
 }
 
 void PathTracer::create_pipeline() {
-    OptixProgramGroup program_groups[] = { raygen_pg_, miss_pg_, hitgroup_pg_ };
+    OptixProgramGroup program_groups[] = { raygen_pg_, miss_pg_, sphere_hitgroup_pg_, detector_hitgroup_pg_ };
 
     OptixPipelineLinkOptions pipeline_link_options = {};
-    pipeline_link_options.maxTraceDepth = 2; // Keep it low, recursion is handled in the loop
+    pipeline_link_options.maxTraceDepth = 1; // For iterative tracer, depth is 1
 
     char log[2048];
     size_t log_size = sizeof(log);
@@ -159,29 +171,56 @@ void PathTracer::create_sbt() {
     sbt_.missRecordStrideInBytes = sizeof(miss_header);
     sbt_.missRecordCount = 1;
 
-    // Hitgroup record
-    // 1. Create a host-side buffer for the record
-    std::vector<char> hg_record(OPTIX_SBT_RECORD_HEADER_SIZE + sizeof(SphereSbtData));
+    // Hitgroup records (sphere + detector)
+    // Calculate aligned record size (use the larger of the two data structures)
+    size_t sphere_record_size = OPTIX_SBT_RECORD_HEADER_SIZE + sizeof(SphereSbtData);
+    size_t detector_record_size = OPTIX_SBT_RECORD_HEADER_SIZE + sizeof(DiskSbtData);
+    size_t record_size = sphere_record_size > detector_record_size ? sphere_record_size : detector_record_size;
+    size_t aligned_record_size = ((record_size + OPTIX_SBT_RECORD_ALIGNMENT - 1) / OPTIX_SBT_RECORD_ALIGNMENT) * OPTIX_SBT_RECORD_ALIGNMENT;
 
-    // 2. Pack the header
-    OPTIX_CHECK(optixSbtRecordPackHeader(hitgroup_pg_, hg_record.data()));
+    // Allocate space for 2 records
+    hitgroup_sbt_records_.alloc(2 * aligned_record_size);
 
-    // 3. Get the sphere data from the scene and copy it after the header
-    const DeviceBuffer& sphere_data_buffer = scene_.get_sphere_data_buffer();
-    sphere_data_buffer.download(hg_record.data() + OPTIX_SBT_RECORD_HEADER_SIZE, sizeof(SphereSbtData));
+    // Build sphere record (index 0)
+    char sphere_header[OPTIX_SBT_RECORD_HEADER_SIZE];
+    OPTIX_CHECK(optixSbtRecordPackHeader(sphere_hitgroup_pg_, &sphere_header));
 
-    // 4. Align the record size to OPTIX_SBT_RECORD_ALIGNMENT
-    size_t record_size = hg_record.size();
-    size_t aligned_size = ((record_size + OPTIX_SBT_RECORD_ALIGNMENT - 1) / OPTIX_SBT_RECORD_ALIGNMENT) * OPTIX_SBT_RECORD_ALIGNMENT;
-    hg_record.resize(aligned_size, 0);
+    CUdeviceptr sphere_record_ptr = hitgroup_sbt_records_.get_cu_ptr();
+    CUDA_CHECK(cudaMemcpy(
+        (void*)sphere_record_ptr,
+        &sphere_header,
+        OPTIX_SBT_RECORD_HEADER_SIZE,
+        cudaMemcpyHostToDevice
+    ));
+    CUDA_CHECK(cudaMemcpy(
+        (void*)(sphere_record_ptr + OPTIX_SBT_RECORD_HEADER_SIZE),
+        (void*)scene_.get_sphere_data_buffer().get_cu_ptr(),
+        sizeof(SphereSbtData),
+        cudaMemcpyDeviceToDevice
+    ));
 
-    // 5. Upload the complete record to the GPU
-    hitgroup_sbt_record_.upload(hg_record.data(), hg_record.size());
+    // Build detector record (index 1)
+    char detector_header[OPTIX_SBT_RECORD_HEADER_SIZE];
+    OPTIX_CHECK(optixSbtRecordPackHeader(detector_hitgroup_pg_, &detector_header));
 
-    // 6. Point the SBT to the new record
-    sbt_.hitgroupRecordBase = hitgroup_sbt_record_.get_cu_ptr();
-    sbt_.hitgroupRecordStrideInBytes = aligned_size;
-    sbt_.hitgroupRecordCount = 1;
+    CUdeviceptr detector_record_ptr = hitgroup_sbt_records_.get_cu_ptr() + aligned_record_size;
+    CUDA_CHECK(cudaMemcpy(
+        (void*)detector_record_ptr,
+        &detector_header,
+        OPTIX_SBT_RECORD_HEADER_SIZE,
+        cudaMemcpyHostToDevice
+    ));
+    CUDA_CHECK(cudaMemcpy(
+        (void*)(detector_record_ptr + OPTIX_SBT_RECORD_HEADER_SIZE),
+        (void*)scene_.get_detector_data_buffer().get_cu_ptr(),
+        sizeof(DiskSbtData),
+        cudaMemcpyDeviceToDevice
+    ));
+
+    // Point SBT to the records
+    sbt_.hitgroupRecordBase = hitgroup_sbt_records_.get_cu_ptr();
+    sbt_.hitgroupRecordStrideInBytes = aligned_record_size;
+    sbt_.hitgroupRecordCount = 2;
 
     std::cout << "✅ SBT created" << std::endl;
 }
@@ -189,28 +228,38 @@ void PathTracer::create_sbt() {
 SimulationResult PathTracer::launch(const SimConfig& config, const LightSource& light, const Detector& detector) {
     std::cout << "\n🚀 Launching simulation..." << std::endl;
 
-    // 1. Prepare device buffers
-    DeviceBuffer flux_buffer(sizeof(float));
+    // 1. Prepare device buffers for statistics
+    DeviceBuffer flux_buffer(sizeof(double));  // 使用double精度
+    DeviceBuffer detected_rays_buffer(sizeof(unsigned long long));
+    DeviceBuffer total_bounces_buffer(sizeof(unsigned long long));
     DeviceBuffer seed_buffer(config.num_rays * sizeof(unsigned int));
-    
-    float zero = 0.0f;
-    flux_buffer.upload(&zero, sizeof(float)); // Reset flux counter
 
+    // Reset statistic counters to zero
+    double zero_d = 0.0;  // 使用double
+    unsigned long long zero_ull = 0;
+    flux_buffer.upload(&zero_d, sizeof(double));
+    detected_rays_buffer.upload(&zero_ull, sizeof(unsigned long long));
+    total_bounces_buffer.upload(&zero_ull, sizeof(unsigned long long));
+
+    // 初始化随机数种子
     std::vector<unsigned int> seeds(config.num_rays);
-    for (int i = 0; i < config.num_rays; ++i) {
-        seeds[i] = i * 1234567; // Simple seed initialization
+    for (size_t i = 0; i < config.num_rays; ++i) {
+        seeds[i] = config.random_seed + static_cast<unsigned int>(i * 1234567);
     }
-    seed_buffer.upload(seeds);
+    seed_buffer.upload(seeds.data(), seeds.size() * sizeof(unsigned int));
 
     // 2. Populate the device parameter block
     DeviceParams params = {};
     params.traversable = scene_.get_traversable();
-    params.flux_buffer = flux_buffer.get<float>();
+    params.flux_buffer = flux_buffer.get<double>();
+    params.detected_rays_buffer = detected_rays_buffer.get<unsigned long long>();
+    params.total_bounces_buffer = total_bounces_buffer.get<unsigned long long>();
     params.seed_buffer = seed_buffer.get<unsigned int>();
     params.num_rays = config.num_rays;
     params.max_bounces = config.max_bounces;
     params.power_per_ray = light.power / config.num_rays;
-    
+    params.use_nee = config.use_nee;  // 传递NEE配置
+
     params.light_source.position = light.position;
     params.detector.position = detector.position;
     params.detector.normal = detector.normal;
@@ -235,20 +284,28 @@ SimulationResult PathTracer::launch(const SimConfig& config, const LightSource& 
     std::cout << "✅ Simulation finished." << std::endl;
 
     // 4. Retrieve results
-    float detected_flux;
-    flux_buffer.download(&detected_flux, sizeof(float));
+    double accumulated_weight;  // 累积的无量纲权重 (double精度)
+    unsigned long long detected_rays_count;
+    unsigned long long total_bounces_count;
 
-    float detector_area = M_PI * detector.radius * detector.radius;
-    
+    flux_buffer.download(&accumulated_weight, sizeof(double));
+    detected_rays_buffer.download(&detected_rays_count, sizeof(unsigned long long));
+    total_bounces_buffer.download(&total_bounces_count, sizeof(unsigned long long));
+
+    // 归一化：将无量纲权重转换为物理单位的通量(W)
+    // flux = (accumulated_weight / num_rays) × total_power
+    double normalization = light.power / config.num_rays;
+    double detected_flux = accumulated_weight * normalization;  // W
+
+    double detector_area = M_PI * detector.radius * detector.radius;  // mm²
+
     SimulationResult result = {};
     result.total_rays = config.num_rays;
-    result.detected_flux = detected_flux;
-    result.irradiance = detected_flux / detector_area;
-    
-    // detected_rays and avg_bounces would require more buffers to track,
-    // skipping for now to keep it simple.
-    result.detected_rays = 0; 
-    result.avg_bounces = 0.0f;
+    result.detected_flux = detected_flux;               // W
+    result.irradiance = detected_flux / detector_area;  // W/mm²
+    result.detected_rays = detected_rays_count;
+    result.avg_bounces = (config.num_rays > 0) ?
+        static_cast<float>(total_bounces_count) / config.num_rays : 0.0f;
 
     return result;
 }

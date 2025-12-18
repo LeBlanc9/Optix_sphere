@@ -6,18 +6,25 @@
 // This header defines data structures shared between the host (C++)
 // and the device (CUDA). It should be C-compatible.
 
-// SBT record for our sphere primitive
+// SBT record for sphere primitive
 struct SphereSbtData {
     float3 center;
     float radius;
     float reflectance;
 };
 
+// SBT record for disk primitive (detector)
+struct DiskSbtData {
+    float3 center;
+    float3 normal;
+    float radius;
+};
+
 // Data passed along with a ray
 struct RayPayload {
     float3 origin;
     float3 direction;
-    float power;
+    double weight;      // 无量纲权重 (初始=1.0, 代表光子存活概率) - 使用double提高精度
     int bounce_count;
     bool active;
     unsigned int seed;
@@ -28,14 +35,17 @@ struct DeviceParams {
     // Scene geometry
     OptixTraversableHandle traversable;
 
-    // We pass pointers to device buffers for dynamic data
+    // Statistic gathering
+    double* flux_buffer;    // 使用double精度累积通量
+    unsigned long long* detected_rays_buffer;
+    unsigned long long* total_bounces_buffer;
     unsigned int* seed_buffer;
-    float* flux_buffer;
 
-    // Simulation settings
-    int num_rays;
-    int max_bounces;
-    float power_per_ray;
+    // Configuration
+    unsigned int num_rays;
+    unsigned int max_bounces;
+    double power_per_ray;   // 使用double精度
+    bool use_nee;           // 是否启用Next Event Estimation (NEE) 方差优化
 
     // Scene objects
     // For a simple scene, we can pass small objects by value.

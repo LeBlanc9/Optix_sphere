@@ -47,11 +47,12 @@ private:
     // Program groups
     OptixProgramGroup raygen_pg_ = nullptr;
     OptixProgramGroup miss_pg_ = nullptr;
-    OptixProgramGroup hitgroup_pg_ = nullptr;
-    
+    OptixProgramGroup sphere_hitgroup_pg_ = nullptr;
+    OptixProgramGroup detector_hitgroup_pg_ = nullptr;
+
     // Shader Binding Table
     OptixShaderBindingTable sbt_ = {};
     DeviceBuffer raygen_sbt_record_;
     DeviceBuffer miss_sbt_record_;
-    DeviceBuffer hitgroup_sbt_record_;
+    DeviceBuffer hitgroup_sbt_records_; // Now contains both sphere and detector records
 };

@@ -17,21 +17,22 @@ class Scene {
 public:
     Scene(const OptixContext& context);
 
-    // For now, we build a simple, hardcoded ideal sphere scene.
-    // In the future, this could take a list of objects.
-    void build_ideal_sphere(const Sphere& sphere);
+    // Build scene with sphere and detector
+    void build_scene(const Sphere& sphere, const Detector& detector);
 
     OptixTraversableHandle get_traversable() const { return traversable_; }
-    
+
     const DeviceBuffer& get_sphere_data_buffer() const { return sphere_data_buffer_; }
+    const DeviceBuffer& get_detector_data_buffer() const { return detector_data_buffer_; }
 
 private:
     const OptixContext& context_;
-    
+
     // Geometry Acceleration Structure
     DeviceBuffer gas_buffer_;
     OptixTraversableHandle traversable_ = 0;
 
     // Shader Binding Table records for the geometry in this scene
     DeviceBuffer sphere_data_buffer_;
+    DeviceBuffer detector_data_buffer_;
 };
