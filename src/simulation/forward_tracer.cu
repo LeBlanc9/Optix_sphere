@@ -1,10 +1,6 @@
 #include <optix.h>
 #include "device_params.h"
-
-// 定义数学常量
-#ifndef M_PIf
-#define M_PIf 3.14159265358979323846f
-#endif
+#include "constants.h"
 
 // Launch params (passed from CPU)
 extern "C" {
@@ -46,6 +42,36 @@ __device__ float3 sample_lambertian(const float3& normal, unsigned int* seed) {
     return normalize(tangent * x + bitangent * y + normal * z);
 }
 
+// 圆盘相交函数（用于探测器）
+extern "C" __global__ void __intersection__disk() {
+    const DiskSbtData* disk = (DiskSbtData*)optixGetSbtDataPointer();
+    const float3 ray_orig = optixGetWorldRayOrigin();
+    const float3 ray_dir = optixGetWorldRayDirection();
+    const float ray_tmin = optixGetRayTmin();
+    const float ray_tmax = optixGetRayTmax();
+
+    // 圆盘定义：中心在 disk->center，法线为 disk->normal
+    float3 oc = ray_orig - disk->center;
+    float denom = dot(ray_dir, disk->normal);
+
+    // 检查射线是否平行于圆盘平面
+    if (fabsf(denom) > 1e-6f) {
+        float t = -dot(oc, disk->normal) / denom;
+
+        if (t >= ray_tmin && t <= ray_tmax) {
+            // 计算交点
+            float3 hit_point = ray_orig + t * ray_dir;
+            float3 to_center = hit_point - disk->center;
+            float dist_sq = dot(to_center, to_center);
+
+            // 检查是否在圆盘半径内
+            if (dist_sq <= disk->radius * disk->radius) {
+                optixReportIntersection(t, 0);
+            }
+        }
+    }
+}
+
 // 解析球面相交函数
 extern "C" __global__ void __intersection__sphere() {
     const SphereSbtData* sphere = (SphereSbtData*)optixGetSbtDataPointer();
@@ -67,12 +93,36 @@ extern "C" __global__ void __intersection__sphere() {
         float t = t1;
         if (t < ray_tmin) t = t2;
         if (t >= ray_tmin && t <= ray_tmax) {
-            optixReportIntersection(t, 0);
+            // 计算击中点
+            float3 hit_point = ray_orig + t * ray_dir;
+
+            // 排除探测器区域：检查击中点是否在探测器圆盘内
+            float3 to_detector = hit_point - params.detector.position;
+            float dist_to_detector_sq = dot(to_detector, to_detector);
+
+            // 如果击中点在探测器半径内，不报告球面相交（让探测器处理）
+            if (dist_to_detector_sq > params.detector.radius * params.detector.radius) {
+                optixReportIntersection(t, 0);
+            }
         }
     }
 }
 
-// 最近命中程序
+// 探测器命中程序（简单：记录能量并终止）
+extern "C" __global__ void __closesthit__detector() {
+    unsigned long long payload_ptr = static_cast<unsigned long long>(optixGetPayload_0()) |
+                                     (static_cast<unsigned long long>(optixGetPayload_1()) << 32);
+    RayPayload* payload = reinterpret_cast<RayPayload*>(payload_ptr);
+
+    // 探测器吸收所有入射光子，直接累积权重
+    atomicAdd(params.flux_buffer, payload->weight);
+    atomicAdd(params.detected_rays_buffer, 1ull);
+
+    // 终止路径
+    payload->active = 0;
+}
+
+// 最近命中程序（球体反射）
 extern "C" __global__ void __closesthit__sphere() {
     const SphereSbtData* sphere = (SphereSbtData*)optixGetSbtDataPointer();
     unsigned long long payload_ptr = static_cast<unsigned long long>(optixGetPayload_0()) | 
@@ -84,42 +134,36 @@ extern "C" __global__ void __closesthit__sphere() {
     float3 ray_orig = optixGetWorldRayOrigin();
     float3 ray_dir = optixGetWorldRayDirection();
     float3 hit_point = ray_orig + t_hit * ray_dir;
-    float3 normal = normalize(hit_point - sphere->center);
+    float3 geometric_normal = normalize(hit_point - sphere->center);
 
-    // 2. 检查是否命中探测器 (Ray-Disk Intersection)
-    // Is the hit point on the same plane as the detector?
-    float3 to_detector = hit_point - params.detector.position;
-    float dist_to_plane = dot(to_detector, params.detector.normal);
+    // 法线应该总是与射线方向相反（用于内部反射）
+    float3 shading_normal = dot(ray_dir, geometric_normal) < 0 ? geometric_normal : -geometric_normal;
 
-    // Check if the ray is behind the detector plane and going towards it
-    if (dot(ray_dir, params.detector.normal) < 0 && fabsf(dist_to_plane) < 1e-5f) {
-        // Is the hit point within the detector's radius?
-        if (dot(to_detector, to_detector) < params.detector.radius * params.detector.radius) {
-            float cos_theta = fmaxf(0.0f, dot(-ray_dir, params.detector.normal));
-            float detected_flux = payload->power * cos_theta;
-            atomicAdd(params.flux_buffer, detected_flux);
-            payload->active = false;
-            return;
-        }
-    }
+    // 2. Next Event Estimation (NEE): 使用 shadow ray 显式采样探测器
+    // TODO: 稍后实现基于 shadow ray 的正确 NEE
+    // if (params.use_nee) {
+    //     // 朝向探测器发射 shadow ray
+    //     // 如果未被遮挡，累积 NEE 贡献
+    // }
 
     // 3. 反射次数检查 & 俄罗斯轮盘赌
+    atomicAdd(params.total_bounces_buffer, 1ull); // Increment total bounces
     payload->bounce_count++;
     if (payload->bounce_count >= params.max_bounces) {
-        payload->active = false;
+        payload->active = 0;
         return;
     }
     float survival_prob = sphere->reflectance;
     if (random_float(&payload->seed) >= survival_prob) {
-        payload->active = false;
+        payload->active = 0;
         return;
     }
 
-    // 4. 更新光线状态以进行下一次反弹
-    payload->power /= survival_prob; // 能量守恒
-    payload->origin = hit_point + normal * 1e-4f; // 避免自相交
-    payload->direction = sample_lambertian(normal, &payload->seed);
-    payload->active = true;
+    // 5. 更新光线状态以进行下一次反弹（间接光照路径）
+    payload->weight *= sphere->reflectance / survival_prob; // 更新权重（无偏估计）
+    payload->origin = hit_point + shading_normal * 1e-3f; // 避免自相交 (1微米 in mm)
+    payload->direction = sample_lambertian(shading_normal, &payload->seed);
+    payload->active = 1;
 }
 
 // Miss 程序（光线逃逸）
@@ -127,7 +171,7 @@ extern "C" __global__ void __miss__sphere() {
     unsigned long long payload_ptr = static_cast<unsigned long long>(optixGetPayload_0()) | 
                                      (static_cast<unsigned long long>(optixGetPayload_1()) << 32);
     RayPayload* payload = reinterpret_cast<RayPayload*>(payload_ptr);
-    payload->active = false;
+    payload->active = 0;
 }
 
 // Ray generation 程序
@@ -142,13 +186,13 @@ extern "C" __global__ void __raygen__forward_trace() {
     float phi = acosf(2.0f * u2 - 1.0f);
     float3 direction = make_float3(sinf(phi) * cosf(theta), sinf(phi) * sinf(theta), cosf(phi));
 
-    // 初始化 payload
+    // 初始化 payload (无量纲weight)
     RayPayload payload;
     payload.origin = params.light_source.position;
     payload.direction = direction;
-    payload.power = params.power_per_ray;
+    payload.weight = 1.0f;  // 初始权重=1 (无量纲)
     payload.bounce_count = 0;
-    payload.active = true;
+    payload.active = 1;
     payload.seed = seed;
 
     // 追踪光线 (循环多次反射)

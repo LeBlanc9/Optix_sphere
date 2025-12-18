@@ -1,9 +1,11 @@
 #include "theory.h"
+#include "constants.h"
 #include <iostream>
 #include <iomanip>
 #include <cmath>
 #include <string>
 
+// 单位约定: radius in mm, power in W, result irradiance in W/mm²
 TheoryResult TheoryCalculator::calculateIdealSphere(
     float radius,
     float reflectance,
@@ -11,10 +13,10 @@ TheoryResult TheoryCalculator::calculateIdealSphere(
 ) {
     TheoryResult result;
 
-    // 球面面积：A = 4πr²
-    result.sphere_area = 4.0f * PI * radius * radius;
+    // 球面面积：A = 4πr² (mm²)
+    result.sphere_area = 4.0 * PI * radius * radius;
 
-    // 平均辐照度（Goebel 公式）
+    // 平均辐照度（Goebel 公式） (W/mm²)
     // E = (ρ * Φ) / (A * (1 - ρ))
     //
     // 推导：
@@ -26,20 +28,21 @@ TheoryResult TheoryCalculator::calculateIdealSphere(
     // 但每次反射后，通量分布在整个球面上
     // 所以平均辐照度：E = (ρ * Φ) / (A * (1 - ρ))
 
-    if (reflectance >= 1.0f) {
+    if (reflectance >= 1.0) {
         std::cerr << "Warning: reflectance >= 1.0 leads to infinite irradiance" << std::endl;
         result.avg_irradiance = INFINITY;
     } else {
         result.avg_irradiance = (reflectance * incident_power) /
-                                (result.sphere_area * (1.0f - reflectance));
+                                (result.sphere_area * (1.0 - reflectance));
     }
 
     // 球内总通量（考虑多次反射）
-    result.total_flux_in_sphere = incident_power / (1.0f - reflectance);
+    result.total_flux_in_sphere = incident_power / (1.0 - reflectance);
 
     return result;
 }
 
+// 单位约定: radius in mm, port_area in mm², power in W, result in W/mm²
 TheoryResult TheoryCalculator::calculateWithPorts(
     float radius,
     float reflectance,
@@ -48,36 +51,39 @@ TheoryResult TheoryCalculator::calculateWithPorts(
 ) {
     TheoryResult result;
 
-    result.sphere_area = 4.0f * PI * radius * radius;
+    result.sphere_area = 4.0 * PI * radius * radius;  // mm²
 
     // 等效反射率（考虑端口损失）
     // ρ_eff = ρ * (1 - A_port / A_sphere)
     // 因为端口区域不反射光
-    float port_ratio = port_area / result.sphere_area;
-    float effective_reflectance = reflectance * (1.0f - port_ratio);
+    double port_ratio = port_area / result.sphere_area;
+    double effective_reflectance = reflectance * (1.0 - port_ratio);
 
-    if (effective_reflectance >= 1.0f) {
+    if (effective_reflectance >= 1.0) {
         result.avg_irradiance = INFINITY;
+        result.detected_flux = INFINITY;
     } else {
-        result.avg_irradiance = (effective_reflectance * incident_power) /
-                                (result.sphere_area * (1.0f - effective_reflectance));
+        // 总平均辐照度: E = P_incident / (A_sphere * (1 - ρ_eff)) [W/mm²]
+        result.avg_irradiance = incident_power /
+                                (result.sphere_area * (1.0 - effective_reflectance));
+        result.detected_flux = result.avg_irradiance * port_area;  // W
     }
 
-    result.total_flux_in_sphere = incident_power / (1.0f - effective_reflectance);
+    result.total_flux_in_sphere = incident_power / (1.0 - effective_reflectance);  // W
 
     return result;
 }
 
-float TheoryCalculator::calculateRelativeError(
+double TheoryCalculator::calculateRelativeError(
     const SimulationResult& simulation,
     const TheoryResult& theory
 ) {
-    if (theory.avg_irradiance == 0.0f) {
+    if (theory.avg_irradiance == 0.0) {
         return INFINITY;
     }
 
-    float abs_error = std::abs(simulation.irradiance - theory.avg_irradiance);
-    return (abs_error / theory.avg_irradiance) * 100.0f;
+    double abs_error = std::abs(simulation.irradiance - theory.avg_irradiance);
+    return (abs_error / theory.avg_irradiance) * 100.0;
 }
 
 void TheoryCalculator::printComparison(
@@ -94,13 +100,13 @@ void TheoryCalculator::printComparison(
     std::cout << "║ Metric                    │ Simulation  │ Theory      ║\n";
     std::cout << "╟───────────────────────────┼─────────────┼─────────────╢\n";
 
-    std::cout << "║ Irradiance (W/m²)         │ "
+    std::cout << "║ Irradiance (W/mm²)        │ "
               << std::setw(11) << simulation.irradiance << " │ "
               << std::setw(11) << theory.avg_irradiance << " ║\n";
 
     std::cout << "║ Detected flux (W)         │ "
               << std::setw(11) << simulation.detected_flux << " │ "
-              << std::setw(11) << "N/A" << " ║\n";
+              << std::setw(11) << theory.detected_flux << " ║\n";
 
     std::cout << "╟───────────────────────────┴─────────────┴─────────────╢\n";
 

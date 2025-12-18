@@ -116,6 +116,50 @@ include(GoogleTest)
 # gtest_discover_tests(unit_tests)
 gtest_add_tests(TARGET unit_tests)
 
+# Python bindings (optional)
+option(BUILD_PYTHON_BINDINGS "Build Python bindings using pybind11" OFF)
+
+if(BUILD_PYTHON_BINDINGS)
+    message(STATUS "Building Python bindings...")
+
+    # Find pybind11
+    find_package(pybind11 CONFIG REQUIRED)
+
+    # Python module
+    pybind11_add_module(_core
+        src/python/bindings.cpp
+        src/core/optix_context.cpp
+        src/scene/scene.cpp
+        src/simulation/path_tracer.cpp
+    )
+
+    add_dependencies(_core ptx_target)
+
+    target_include_directories(_core PRIVATE
+        ${OptiX_INCLUDE}
+        ${CUDAToolkit_INCLUDE_DIRS}
+    )
+
+    target_link_libraries(_core PRIVATE
+        theory
+        ${CMAKE_DL_LIBS}
+        CUDA::cudart
+    )
+
+    # Copy PTX file to Python module directory
+    add_custom_command(TARGET _core POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            ${CMAKE_CURRENT_BINARY_DIR}/forward_tracer.ptx
+            $<TARGET_FILE_DIR:_core>/forward_tracer.ptx
+        COMMENT "Copying PTX file to Python module directory"
+    )
+
+    # Install Python module
+    install(TARGETS _core LIBRARY DESTINATION python/optix_sphere)
+    install(FILES ${CMAKE_CURRENT_BINARY_DIR}/forward_tracer.ptx
+            DESTINATION python/optix_sphere)
+endif()
+
 message(STATUS "")
 message(STATUS "Build: cd build && cmake .. && make")
 message(STATUS "Test:  cd build && ctest --verbose")

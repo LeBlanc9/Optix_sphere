@@ -1,10 +1,9 @@
 #pragma once
 
-#include "simulation_result.h"
 #include <cmath>
+#include "simulation_result.h"
+#include "constants.h"
 
-// 常用数学常量
-constexpr float PI = 3.14159265358979323846f;
 
 /**
  * 积分球理论计算器
@@ -59,9 +58,9 @@ public:
      *
      * @param simulation 模拟结果
      * @param theory 理论结果
-     * @return 相对误差百分比
+     * @return 相对误差百分比 (double精度)
      */
-    static float calculateRelativeError(
+    static double calculateRelativeError(
         const SimulationResult& simulation,
         const TheoryResult& theory
     );
