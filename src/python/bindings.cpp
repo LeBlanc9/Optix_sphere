@@ -9,6 +9,7 @@
 #include "scene_types.h"
 #include "simulation_result.h"
 #include "constants.h"
+#include "embedded_ptx.h"  // 嵌入的 PTX 代码
 
 namespace py = pybind11;
 
@@ -24,8 +25,8 @@ public:
         detector_ = detector;
         scene_.build_scene(sphere, detector);
 
-        // 创建 PathTracer
-        tracer_ = std::make_unique<PathTracer>(context_, scene_, "forward_tracer.ptx");
+        // 创建 PathTracer (使用嵌入的 PTX 代码)
+        tracer_ = std::make_unique<PathTracer>(context_, scene_, embedded::g_forward_tracer_ptx, true);
     }
 
     SimulationResult run(const SimConfig& config, const LightSource& light) {

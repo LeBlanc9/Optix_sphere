@@ -2,13 +2,14 @@
 #include <iomanip>
 #include <cmath>
 #include <chrono>
-#include <optix_function_table_definition.h>
+#include <spdlog/spdlog.h>
 #include "core/optix_context.h"
 #include "scene/scene.h"
 #include "simulation/path_tracer.h"
 #include "theory/theory.h"
 #include "scene_types.h"
 #include "constants.h"
+#include "embedded_ptx.h"  // 嵌入的 PTX 代码
 
 int main() {
     try {
@@ -27,7 +28,7 @@ int main() {
 
         // 配置探测器 - 使用弦面几何（在球面上开孔）
         Detector detector;
-        float port_hole_radius = 10.0f;  // 开孔半径 (mm)
+        float port_hole_radius = 0.03f;  // 开孔半径 (mm)
         configure_detector_chord(detector, sphere_geom, port_hole_radius);
 
         float port_hole_area = PI * port_hole_radius * port_hole_radius;  // 计算面积供理论使用
@@ -39,7 +40,7 @@ int main() {
         std::cout << "  Inset depth: " << (sphere_geom.radius - detector.position.x) << " mm" << std::endl;
 
         SimConfig config;
-        config.num_rays = 5'000'000;             // 500万光线 - 平衡精度与速度
+        config.num_rays = 5'000'000;
         config.max_bounces = 500;
 
         // 随机数种子：0=固定（可重复），或设置为随机值
@@ -61,26 +62,26 @@ int main() {
         Scene scene(context);
         scene.build_scene(sphere_geom, detector);
 
-        // 4. Setup PathTracer
-        PathTracer tracer(context, scene, "forward_tracer.ptx");
+        // 4. Setup PathTracer (使用嵌入的 PTX 代码)
+        PathTracer tracer(context, scene, embedded::g_forward_tracer_ptx, true);
 
         // 5. Run Non-NEE simulation
-        std::cout << "\n🔹 Running Non-NEE (Standard Path Tracing)..." << std::endl;
+        spdlog::info("\n🔹 Running Non-NEE (Standard Path Tracing)...");
         config.use_nee = false;
         auto start_time = std::chrono::high_resolution_clock::now();
         SimulationResult non_nee_result = tracer.launch(config, light, detector);
         auto end_time = std::chrono::high_resolution_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
-        std::cout << "  ✅ Non-NEE took: " << duration.count() << " ms" << std::endl;
+        spdlog::info("  ✅ Non-NEE took: {} ms", duration.count());
 
         // 6. Run NEE simulation
-        std::cout << "\n🔹 Running NEE (Variance Reduction)..." << std::endl;
+        spdlog::info("\n🔹 Running NEE (Variance Reduction)...");
         config.use_nee = true;
         start_time = std::chrono::high_resolution_clock::now();
         SimulationResult nee_result = tracer.launch(config, light, detector);
         end_time = std::chrono::high_resolution_clock::now();
         duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
-        std::cout << "  ✅ NEE took: " << duration.count() << " ms" << std::endl;
+        spdlog::info("  ✅ NEE took: {} ms", duration.count());
 
         // 7. Calculate theoretical solution
         // 注意：理论计算应使用实际开孔面积，而不是探测器圆盘面积
@@ -126,7 +127,7 @@ int main() {
         std::cout << std::endl;
 
     } catch (const std::exception& e) {
-        std::cerr << "Fatal error: " << e.what() << std::endl;
+        spdlog::error("Fatal error: {}", e.what());
         return 1;
     }
 

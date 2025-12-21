@@ -1,13 +1,14 @@
 #include "optix_context.h"
 #include "device_buffer.h" // For CUDA_CHECK
-#include <iostream>
+#include <optix_function_table_definition.h>
+#include <spdlog/spdlog.h>
 
 OptixContext::OptixContext() {
     try {
         init_cuda();
         init_optix();
     } catch (const std::exception& e) {
-        std::cerr << "Error during OptiX context initialization: " << e.what() << std::endl;
+        spdlog::error("Error during OptiX context initialization: {}", e.what());
         // In a real application, you might want to re-throw or handle this more gracefully
         exit(1);
     }
@@ -17,10 +18,10 @@ OptixContext::~OptixContext() {
     try {
         if (context_) {
             OPTIX_CHECK(optixDeviceContextDestroy(context_));
-            std::cout << "✅ OptiX context destroyed" << std::endl;
+            spdlog::info("✅ OptiX context destroyed");
         }
     } catch (const std::exception& e) {
-        std::cerr << "Error during OptiX context destruction: " << e.what() << std::endl;
+        spdlog::error("Error during OptiX context destruction: {}", e.what());
     }
 }
 
@@ -35,7 +36,7 @@ void OptixContext::init_cuda() {
 
     cudaDeviceProp props;
     CUDA_CHECK(cudaGetDeviceProperties(&props, 0));
-    std::cout << "✅ CUDA Device: " << props.name << std::endl;
+    spdlog::info("✅ CUDA Device: {}", props.name);
     
     // The CUcontext is implicitly managed by the CUDA runtime API
     // We can get it if needed, but for now we'll pass 0 to OptiX
@@ -43,7 +44,7 @@ void OptixContext::init_cuda() {
 
 void OptixContext::init_optix() {
     OPTIX_CHECK(optixInit());
-    std::cout << "✅ OptiX initialized" << std::endl;
+    spdlog::info("✅ OptiX initialized");
 
     OptixDeviceContextOptions options = {};
     options.logCallbackFunction = &OptixContext::context_log_cb;
@@ -51,9 +52,24 @@ void OptixContext::init_optix() {
 
     // Note: The first argument is the CUcontext. 0 means use the current one.
     OPTIX_CHECK(optixDeviceContextCreate(cuda_context_, &options, &context_));
-    std::cout << "✅ OptiX context created" << std::endl;
+    spdlog::info("✅ OptiX context created");
 }
 
 void OptixContext::context_log_cb(unsigned int level, const char* tag, const char* message, void*) {
-    std::cerr << "[" << std::to_string(level) << "][" << tag << "]: " << message << std::endl;
+    // OptiX log levels: 1=Fatal, 2=Error, 3=Warning, 4=Info
+    std::string formatted_msg = fmt::format("[{}]: {}", tag, message);
+
+    switch (level) {
+        case 1: // Fatal
+        case 2: // Error
+            spdlog::error("{}", formatted_msg);
+            break;
+        case 3: // Warning
+            spdlog::warn("{}", formatted_msg);
+            break;
+        case 4: // Info
+        default:
+            spdlog::debug("{}", formatted_msg);
+            break;
+    }
 }

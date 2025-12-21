@@ -17,16 +17,8 @@ set(OptiX_INCLUDE "${OptiX_INSTALL_DIR}/include")
 # CUDA
 find_package(CUDAToolkit REQUIRED)
 
-# Fetch Google Test
-include(FetchContent)
-FetchContent_Declare(
-    googletest
-    GIT_REPOSITORY https://github.com/google/googletest.git
-    GIT_TAG v1.14.0
-)
-# For Windows: Prevent overriding the parent project's compiler/linker settings
-set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
-FetchContent_MakeAvailable(googletest)
+# External dependencies (googletest, spdlog, etc.)
+include(cmake/dependencies.cmake)
 
 # Enable testing
 enable_testing()
@@ -56,14 +48,37 @@ add_custom_command(
         -I${OptiX_INCLUDE}
         -I${CUDAToolkit_INCLUDE_DIRS}
         -I${CMAKE_CURRENT_SOURCE_DIR}/include
-        ${CMAKE_CURRENT_SOURCE_DIR}/src/simulation/forward_tracer.cu
+        -I${CMAKE_CURRENT_SOURCE_DIR}/src/simulation
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/simulation/kernels.cu
         -o ${CMAKE_CURRENT_BINARY_DIR}/forward_tracer.ptx
-    DEPENDS src/simulation/forward_tracer.cu include/device_params.h
-    COMMENT "Compiling forward_tracer.cu to PTX"
+    DEPENDS
+        src/simulation/kernels.cu
+        src/simulation/kernels/kernel_utils.cuh
+        src/simulation/kernels/intersection.cu
+        src/simulation/kernels/radiance.cu
+        src/simulation/kernels/shadow.cu
+        src/simulation/kernels/raygen.cu
+        include/device_params.h
+    COMMENT "Compiling kernels to PTX"
 )
 
 add_custom_target(ptx_target ALL
     DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/forward_tracer.ptx
+)
+
+# 将 PTX 嵌入为 C++ 头文件
+add_custom_command(
+    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/embedded_ptx.h
+    COMMAND ${CMAKE_COMMAND}
+        -DPTX_FILE=${CMAKE_CURRENT_BINARY_DIR}/forward_tracer.ptx
+        -DOUTPUT_FILE=${CMAKE_CURRENT_BINARY_DIR}/embedded_ptx.h
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/embed_ptx.cmake
+    DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/forward_tracer.ptx
+    COMMENT "Embedding PTX into C++ header"
+)
+
+add_custom_target(embedded_ptx_target ALL
+    DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/embedded_ptx.h
 )
 
 # 积分球模拟器
@@ -72,17 +87,21 @@ add_executable(ideal_sphere_sim
     src/core/optix_context.cpp
     src/scene/scene.cpp
     src/simulation/path_tracer.cpp
+    src/simulation/optix_pipeline_builder.cpp
+    src/simulation/optix_sbt_builder.cpp
 )
 
-add_dependencies(ideal_sphere_sim ptx_target)
+add_dependencies(ideal_sphere_sim ptx_target embedded_ptx_target)
 
 target_include_directories(ideal_sphere_sim PRIVATE
     ${OptiX_INCLUDE}
     ${CUDAToolkit_INCLUDE_DIRS}
+    ${CMAKE_CURRENT_BINARY_DIR}  # For embedded_ptx.h
 )
 
 target_link_libraries(ideal_sphere_sim PRIVATE
     theory
+    spdlog::spdlog
     ${CMAKE_DL_LIBS}
     CUDA::cudart
 )
@@ -112,14 +131,10 @@ target_link_libraries(unit_tests PRIVATE
 
 # 注册测试
 include(GoogleTest)
-# 禁用自动测试发现以避免 Windows 上的 DLL 依赖问题
-# gtest_discover_tests(unit_tests)
 gtest_add_tests(TARGET unit_tests)
 
-# Python bindings (optional)
 option(BUILD_PYTHON_BINDINGS "Build Python bindings using pybind11" OFF)
-
-if(BUILD_PYTHON_BINDINGS)
+if (SKBUILD)
     message(STATUS "Building Python bindings...")
 
     # Find pybind11
@@ -131,33 +146,27 @@ if(BUILD_PYTHON_BINDINGS)
         src/core/optix_context.cpp
         src/scene/scene.cpp
         src/simulation/path_tracer.cpp
+        src/simulation/optix_pipeline_builder.cpp
+        src/simulation/optix_sbt_builder.cpp
     )
 
-    add_dependencies(_core ptx_target)
+    add_dependencies(_core ptx_target embedded_ptx_target)
 
     target_include_directories(_core PRIVATE
         ${OptiX_INCLUDE}
         ${CUDAToolkit_INCLUDE_DIRS}
+        ${CMAKE_CURRENT_BINARY_DIR}  # For embedded_ptx.h
     )
 
     target_link_libraries(_core PRIVATE
         theory
+        spdlog::spdlog
         ${CMAKE_DL_LIBS}
         CUDA::cudart
     )
 
-    # Copy PTX file to Python module directory
-    add_custom_command(TARGET _core POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            ${CMAKE_CURRENT_BINARY_DIR}/forward_tracer.ptx
-            $<TARGET_FILE_DIR:_core>/forward_tracer.ptx
-        COMMENT "Copying PTX file to Python module directory"
-    )
-
-    # Install Python module
-    install(TARGETS _core LIBRARY DESTINATION python/optix_sphere)
-    install(FILES ${CMAKE_CURRENT_BINARY_DIR}/forward_tracer.ptx
-            DESTINATION python/optix_sphere)
+    # Install Python module (PTX is now embedded, no need to copy)
+    install(TARGETS _core LIBRARY DESTINATION ${SKBUILD_PLATLIB_DIR}/optix_sphere)
 endif()
 
 message(STATUS "")

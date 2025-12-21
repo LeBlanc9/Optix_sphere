@@ -24,6 +24,7 @@ dev = [
 cmake.minimum-version = "3.18"
 cmake.build-type = "Release"
 wheel.packages = ["python/optix_sphere"]
+wheel.install-dir = "optix_sphere"
 
 [tool.scikit-build.cmake.define]
 BUILD_PYTHON_BINDINGS = "ON"
