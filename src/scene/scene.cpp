@@ -1,12 +1,13 @@
 #include "scene.h"
-#include <iostream>
+// #include <iostream>
+#include <spdlog/spdlog.h>
 
 Scene::Scene(const OptixContext& context) : context_(context) {
     // Constructor can be empty for now
 }
 
 void Scene::build_scene(const Sphere& sphere, const Detector& detector) {
-    std::cout << "Building scene with sphere and detector..." << std::endl;
+    spdlog::info("Building scene with sphere and detector...");
 
     // 1. Create AABBs for both sphere and detector
     OptixAabb aabbs[2];
@@ -102,5 +103,5 @@ void Scene::build_scene(const Sphere& sphere, const Detector& detector) {
     detector_sbt.radius = detector.radius;
     detector_data_buffer_.upload(&detector_sbt, sizeof(DiskSbtData));
 
-    std::cout << "✅ Scene built successfully (sphere + detector)." << std::endl;
+    spdlog::info("✅ Scene built successfully (sphere + detector).");
 }

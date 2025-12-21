@@ -30,13 +30,18 @@ struct RayPayload {
     unsigned int seed;
 };
 
+// Shadow ray payload for NEE (Next Event Estimation)
+struct ShadowPayload {
+    bool occluded;      // 是否被遮挡
+};
+
 // The main parameter block passed to the optixLaunch kernel
 struct DeviceParams {
     // Scene geometry
     OptixTraversableHandle traversable;
 
     // Statistic gathering
-    double* flux_buffer;    // 使用double精度累积通量
+    double* flux_buffer;
     unsigned long long* detected_rays_buffer;
     unsigned long long* total_bounces_buffer;
     unsigned int* seed_buffer;
