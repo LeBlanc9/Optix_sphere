@@ -5,6 +5,9 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+if(MSVC)
+    add_compile_definitions(_SILENCE_STDEXT_ARR_ITERS_DEPRECATION_WARNING)
+endif()
 
 # OptiX 路径
 if(WIN32)
@@ -17,26 +20,10 @@ set(OptiX_INCLUDE "${OptiX_INSTALL_DIR}/include")
 # CUDA
 find_package(CUDAToolkit REQUIRED)
 
-# External dependencies (googletest, spdlog, etc.)
 include(cmake/dependencies.cmake)
 
-# Enable testing
-enable_testing()
-
-# Add root src directory for includes like "core/optix_context.h"
 include_directories(
-    ${CMAKE_CURRENT_SOURCE_DIR}/src
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-)
-
-# 理论计算库
-add_library(theory STATIC
-    src/theory/theory.cpp
-)
-
-target_include_directories(theory PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-    ${CUDAToolkit_INCLUDE_DIRS}
+    ${CMAKE_CURRENT_SOURCE_DIR}/optix_sphere
 )
 
 # 编译 CUDA 为 PTX
@@ -47,18 +34,18 @@ add_custom_command(
         -arch=sm_75
         -I${OptiX_INCLUDE}
         -I${CUDAToolkit_INCLUDE_DIRS}
-        -I${CMAKE_CURRENT_SOURCE_DIR}/include
-        -I${CMAKE_CURRENT_SOURCE_DIR}/src/simulation
-        ${CMAKE_CURRENT_SOURCE_DIR}/src/simulation/kernels.cu
+        -I${CMAKE_CURRENT_SOURCE_DIR}/optix_sphere
+        -I${CMAKE_CURRENT_SOURCE_DIR}/optix_sphere/simulation
+        ${CMAKE_CURRENT_SOURCE_DIR}/optix_sphere/simulation/kernels.cu
         -o ${CMAKE_CURRENT_BINARY_DIR}/forward_tracer.ptx
     DEPENDS
-        src/simulation/kernels.cu
-        src/simulation/kernels/kernel_utils.cuh
-        src/simulation/kernels/intersection.cu
-        src/simulation/kernels/radiance.cu
-        src/simulation/kernels/shadow.cu
-        src/simulation/kernels/raygen.cu
-        include/device_params.h
+        optix_sphere/simulation/kernels.cu
+        optix_sphere/simulation/kernels/kernel_utils.cuh
+        optix_sphere/simulation/kernels/intersection.cu
+        optix_sphere/simulation/kernels/radiance.cu
+        optix_sphere/simulation/kernels/shadow.cu
+        optix_sphere/simulation/kernels/raygen.cu
+        optix_sphere/simulation/device_params.h
     COMMENT "Compiling kernels to PTX"
 )
 
@@ -81,96 +68,92 @@ add_custom_target(embedded_ptx_target ALL
     DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/embedded_ptx.h
 )
 
-# 积分球模拟器
-add_executable(ideal_sphere_sim
-    src/app/main.cpp
-    src/core/optix_context.cpp
-    src/scene/scene.cpp
-    src/simulation/path_tracer.cpp
-    src/simulation/optix_pipeline_builder.cpp
-    src/simulation/optix_sbt_builder.cpp
+# ============================================
+# Core Library: libOptixSphere
+# ============================================
+add_library(OptixSphere STATIC
+    optix_sphere/core/optix_context.cpp
+    optix_sphere/scene/scene.cpp
+    optix_sphere/simulation/path_tracer.cpp
+    optix_sphere/simulation/optix_pipeline_builder.cpp
+    optix_sphere/simulation/optix_sbt_builder.cpp
+    optix_sphere/geometry/mesh_loader.cpp
+    # optix_sphere/geometry/fbx_loader.cpp
+    optix_sphere/theory/theory.cpp
+    optix_sphere/material.cpp
 )
 
-add_dependencies(ideal_sphere_sim ptx_target embedded_ptx_target)
+add_dependencies(OptixSphere ptx_target embedded_ptx_target)
 
-target_include_directories(ideal_sphere_sim PRIVATE
+target_include_directories(OptixSphere PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/optix_sphere
     ${OptiX_INCLUDE}
     ${CUDAToolkit_INCLUDE_DIRS}
     ${CMAKE_CURRENT_BINARY_DIR}  # For embedded_ptx.h
 )
 
-target_link_libraries(ideal_sphere_sim PRIVATE
-    theory
+target_link_libraries(OptixSphere PUBLIC
     spdlog::spdlog
+    tinyobjloader
     ${CMAKE_DL_LIBS}
     CUDA::cudart
 )
 
-# 复制 PTX 文件到可执行文件目录
-add_custom_command(TARGET ideal_sphere_sim POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        ${CMAKE_CURRENT_BINARY_DIR}/forward_tracer.ptx
-        $<TARGET_FILE_DIR:ideal_sphere_sim>/forward_tracer.ptx
-    COMMENT "Copying PTX file to executable directory"
-)
 
-# Google Test 单元测试
-add_executable(unit_tests
-    tests/test_theory.cpp
-)
-target_include_directories(
-    unit_tests PUBLIC
-    src/theory/
-)
-
-target_link_libraries(unit_tests PRIVATE
-    theory
-    GTest::gtest_main
-)
-
-
-# 注册测试
-include(GoogleTest)
-gtest_add_tests(TARGET unit_tests)
-
-option(BUILD_PYTHON_BINDINGS "Build Python bindings using pybind11" OFF)
 if (SKBUILD)
+    # ============================================
+    # Python Bindings (pybind11)
+    # ============================================
     message(STATUS "Building Python bindings...")
 
-    # Find pybind11
     find_package(pybind11 CONFIG REQUIRED)
 
-    # Python module
     pybind11_add_module(_core
-        src/python/bindings.cpp
-        src/core/optix_context.cpp
-        src/scene/scene.cpp
-        src/simulation/path_tracer.cpp
-        src/simulation/optix_pipeline_builder.cpp
-        src/simulation/optix_sbt_builder.cpp
-    )
-
-    add_dependencies(_core ptx_target embedded_ptx_target)
-
-    target_include_directories(_core PRIVATE
-        ${OptiX_INCLUDE}
-        ${CUDAToolkit_INCLUDE_DIRS}
-        ${CMAKE_CURRENT_BINARY_DIR}  # For embedded_ptx.h
+        optix_sphere/python/bindings.cpp
     )
 
     target_link_libraries(_core PRIVATE
-        theory
-        spdlog::spdlog
-        ${CMAKE_DL_LIBS}
-        CUDA::cudart
+        OptixSphere
     )
 
-    # Install Python module (PTX is now embedded, no need to copy)
     install(TARGETS _core LIBRARY DESTINATION ${SKBUILD_PLATLIB_DIR}/optix_sphere)
+
+else()
+    # ============================================
+    #  Test 
+    # ============================================
+    message(STATUS "Building Tests...")
+
+    enable_testing()
+
+    add_executable(main_test
+        tests/main.cpp
+    )
+    target_link_libraries(main_test PRIVATE OptixSphere)
+    add_test(NAME IntegrationTest COMMAND main_test)
+
+
 endif()
 
 message(STATUS "")
-message(STATUS "Build: cd build && cmake .. && make")
-message(STATUS "Test:  cd build && ctest --verbose")
-message(STATUS "Run:   ./test_env")
+message(STATUS "====================================")
+message(STATUS "Optix Sphere")
+message(STATUS "====================================")
+if (SKBUILD)
+    message(STATUS "Mode: Python Package Build")
+    message(STATUS "Targets:")
+    message(STATUS "  - libOptixSphere.a (core library)")
+    message(STATUS "  - _core.pyd (Python module)")
+else()
+    message(STATUS "Mode: C++ Development Build")
+    message(STATUS "Targets:")
+    message(STATUS "  - libOptixSphere.a (core library)")
+    message(STATUS "  - integration_test.exe (main.cpp)")
+    message(STATUS "")
+    message(STATUS "Commands:")
+    message(STATUS "  Build:   cmake -B build && cmake --build build --config Debug")
+    message(STATUS "  Test:    cd build && ctest -C Debug --verbose")
+    message(STATUS "  Run:     build/Debug/integration_test.exe")
+endif()
+message(STATUS "====================================")
 message(STATUS "")
