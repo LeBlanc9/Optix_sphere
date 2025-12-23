@@ -20,6 +20,33 @@ struct DiskSbtData {
     float radius;
 };
 
+// Multi-material SBT data structures for triangle meshes
+
+// SBT data for normal sphere wall (high reflectance)
+struct SphereWallSbtData {
+    float reflectance;  // 反射率 (e.g., 0.98)
+    float3 center;      // 球心（用于计算法线）
+};
+
+// SBT data for detector surface
+struct DetectorSbtData {
+    float3 position;
+    float3 normal;
+    float radius;
+    float sensitivity;  // 灵敏度系数 (通常为 1.0)
+};
+
+// SBT data for baffle (low reflectance)
+struct BaffleSbtData {
+    float reflectance;  // 低反射率 (e.g., 0.1-0.3)
+    float3 center;      // 球心
+};
+
+// SBT data for port hole (complete absorption)
+struct PortHoleSbtData {
+    float3 center;      // 球心（可能不需要，但保持一致性）
+};
+
 // Data passed along with a ray
 struct RayPayload {
     float3 origin;
@@ -65,4 +92,9 @@ struct DeviceParams {
         float radius;
         // Use radius for intersection check, not area
     } detector;
+
+    // Detector triangles for NEE (mesh scene)
+    float3* detector_triangles;          // Array of vertices [v0, v1, v2, v0, v1, v2, ...]
+    unsigned int num_detector_triangles; // Number of triangles
+    float detector_total_area;           // Total area for PDF calculation
 };

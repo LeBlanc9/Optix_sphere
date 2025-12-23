@@ -1,5 +1,5 @@
 #include "path_tracer.h"
-#include "device_params.h"
+#include "simulation/device_params.h"
 #include "constants.h"
 #include <spdlog/spdlog.h>
 #include <math.h>
@@ -88,9 +88,16 @@ SimulationResult PathTracer::launch(const SimConfig& config, const LightSource& 
     params.power_per_ray = light.power / static_cast<double>(config.num_rays);
     params.use_nee = config.use_nee;
     params.light_source.position = light.position;
-    params.detector.position = detector.position;
-    params.detector.normal = detector.normal;
-    params.detector.radius = detector.radius;
+
+    // Use extracted analytical detector parameters from mesh
+    params.detector.position = scene_.get_detector_position();
+    params.detector.normal = scene_.get_detector_normal();
+    params.detector.radius = scene_.get_detector_radius();
+
+    // Detector triangles are not used for NEE (we use analytical disk approximation)
+    params.detector_triangles = nullptr;
+    params.num_detector_triangles = 0;
+    params.detector_total_area = scene_.get_detector_total_area();
 
     DeviceBuffer params_buffer;
     params_buffer.upload(&params, sizeof(DeviceParams));

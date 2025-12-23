@@ -1,7 +1,7 @@
 #pragma once
 
 #include <optix.h>
-#include "device_params.h"
+#include "simulation/device_params.h"
 #include "constants.h"
 
 // Launch params (passed from CPU)
@@ -26,6 +26,12 @@ __device__ __forceinline__ float3 cross(const float3& a, const float3& b) { retu
 __device__ float random_float(unsigned int* seed) {
     *seed = (*seed * 1664525u + 1013904223u);
     return (float)(*seed) / (float)0xFFFFFFFFu;
+}
+
+// 生成随机整数 [0, max)
+__device__ unsigned int random_uint(unsigned int* seed, unsigned int max) {
+    *seed = (*seed * 1664525u + 1013904223u);
+    return *seed % max;
 }
 
 // 生成漫反射方向 (Lambertian BRDF)

@@ -3,11 +3,13 @@
 #include "core/optix_context.h"
 #include <optix.h>
 #include <string>
+#include <unordered_map>
 
 /**
  * @brief 负责构建 OptiX Pipeline 和 Program Groups
  *
  * 将 module 创建、program group 创建、pipeline 创建等逻辑封装
+ * 使用 kernel 名称作为键来动态查找 program groups
  */
 class OptixPipelineBuilder {
 public:
@@ -42,14 +44,12 @@ public:
     OptixModule get_module() const { return module_; }
     OptixPipeline get_pipeline() const { return pipeline_; }
 
-    OptixProgramGroup get_raygen_pg() const { return raygen_pg_; }
-    OptixProgramGroup get_miss_pg() const { return miss_pg_; }
-    OptixProgramGroup get_miss_shadow_pg() const { return miss_shadow_pg_; }
-
-    OptixProgramGroup get_sphere_hitgroup_pg() const { return sphere_hitgroup_pg_; }
-    OptixProgramGroup get_detector_hitgroup_pg() const { return detector_hitgroup_pg_; }
-    OptixProgramGroup get_sphere_shadow_hitgroup_pg() const { return sphere_shadow_hitgroup_pg_; }
-    OptixProgramGroup get_detector_shadow_hitgroup_pg() const { return detector_shadow_hitgroup_pg_; }
+    /**
+     * @brief Get program group by kernel name (modern, unified interface)
+     * @param kernel_name The OptiX kernel function name (e.g., "__closesthit__lambertian")
+     * @return The corresponding program group, or nullptr if not found
+     */
+    OptixProgramGroup get_program_group(const std::string& kernel_name) const;
 
 private:
     const OptixContext& context_;
@@ -58,14 +58,6 @@ private:
     OptixPipeline pipeline_ = nullptr;
     OptixPipelineCompileOptions pipeline_compile_options_ = {};
 
-    // Program groups for radiance rays (ray type 0)
-    OptixProgramGroup raygen_pg_ = nullptr;
-    OptixProgramGroup miss_pg_ = nullptr;
-    OptixProgramGroup sphere_hitgroup_pg_ = nullptr;
-    OptixProgramGroup detector_hitgroup_pg_ = nullptr;
-
-    // Program groups for shadow rays (ray type 1)
-    OptixProgramGroup miss_shadow_pg_ = nullptr;
-    OptixProgramGroup sphere_shadow_hitgroup_pg_ = nullptr;
-    OptixProgramGroup detector_shadow_hitgroup_pg_ = nullptr;
+    // Unified program group storage (kernel name -> program group)
+    std::unordered_map<std::string, OptixProgramGroup> program_groups_;
 };

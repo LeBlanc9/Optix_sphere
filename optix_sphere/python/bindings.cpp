@@ -6,7 +6,7 @@
 #include "scene/scene.h"
 #include "simulation/path_tracer.h"
 #include "theory/theory.h"
-#include "scene_types.h"
+#include "scene/scene_types.h"
 #include "simulation_result.h"
 #include "constants.h"
 #include "embedded_ptx.h"  // 嵌入的 PTX 代码

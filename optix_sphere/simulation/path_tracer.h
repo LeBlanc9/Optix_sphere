@@ -3,7 +3,7 @@
 #include "core/optix_context.h"
 #include "core/device_buffer.h"
 #include "scene/scene.h"
-#include "scene_types.h"
+#include "scene/scene_types.h"
 #include "simulation_result.h"
 #include "optix_pipeline_builder.h"
 #include "optix_sbt_builder.h"

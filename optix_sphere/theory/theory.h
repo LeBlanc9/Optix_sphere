@@ -1,7 +1,7 @@
 #pragma once
 
 #include <cmath>
-#include "simulation_result.h"
+#include "simulation/simulation_result.h"
 #include "constants.h"
 
 
