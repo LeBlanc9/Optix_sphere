@@ -1,19 +1,21 @@
 #pragma once
 
-#include "core/optix_context.h"
-#include "core/device_buffer.h"
+#include "simulation/optix_context.h"
+#include "utils/device/device_buffer.cuh"
 #include "scene/scene.h"
 #include "scene/scene_types.h"
 #include "simulation_result.h"
 #include "optix_pipeline_builder.h"
 #include "optix_sbt_builder.h"
+#include "photon/sources.h"    // Data-only source definitions
+#include "photon/launchers.h"  // C++ API for generate_photons_on_device
 #include <memory>
 
 /**
- * @brief Monte Carlo 路径追踪器
+ * @brief Data-driven Monte Carlo path tracer
  *
- * 负责启动和管理 OptiX 光线追踪模拟
- * 使用 OptixPipelineBuilder 和 OptixSBTBuilder 构建 OptiX 组件
+ * Uses GPU-generated photon sources for maximum flexibility and performance.
+ * Supports arbitrary light sources via the PhotonSource interface.
  */
 class PathTracer {
 public:
@@ -30,13 +32,15 @@ public:
     PathTracer& operator=(const PathTracer&) = delete;
 
     /**
-     * @brief 启动模拟
-     * @param config 模拟配置
-     * @param light 光源
-     * @param detector 探测器
-     * @return 模拟结果
+     * @brief Launch simulation with data-driven photon source
+     * @param config Simulation configuration
+     * @param photon_source Photon source generator (e.g., IsotropicPointSource, SpotSource)
+     * @param detector Detector parameters
+     * @return Simulation result
      */
-    SimulationResult launch(const SimConfig& config, const LightSource& light, const Detector& detector);
+    SimulationResult launch(
+        const SimConfig& config,
+        phonder::PhotonSource& photon_source);
 
 private:
     void initialize(bool from_file, const std::string& ptx_path_or_code);

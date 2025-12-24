@@ -89,11 +89,20 @@ void OptixPipelineBuilder::create_program_groups() {
     // Raygen and Miss programs
     // ============================================
     {
+        // Procedural raygen (isotropic point light source)
         OptixProgramGroupDesc desc = {};
         desc.kind = OPTIX_PROGRAM_GROUP_KIND_RAYGEN;
         desc.raygen.module = module_;
         desc.raygen.entryFunctionName = "__raygen__forward_trace";
         create_and_register("__raygen__forward_trace", desc);
+    }
+    {
+        // Data-driven raygen (reads from input photon array)
+        OptixProgramGroupDesc desc = {};
+        desc.kind = OPTIX_PROGRAM_GROUP_KIND_RAYGEN;
+        desc.raygen.module = module_;
+        desc.raygen.entryFunctionName = "__raygen__data_driven";
+        create_and_register("__raygen__data_driven", desc);
     }
     {
         OptixProgramGroupDesc desc = {};

@@ -1,41 +1,30 @@
-# External dependencies management
+# External dependencies management (via Git Submodules)
+# This file adds the dependencies stored as Git submodules in the 'vendor' directory.
 
-include(FetchContent)
+message(STATUS "Loading dependencies from 'vendor' directory...")
 
-# Google Test - 简化配置，禁用不需要的功能
+# Google Test
+# Disable unnecessary options before adding the subdirectory.
 set(BUILD_GMOCK OFF CACHE BOOL "")
 set(INSTALL_GTEST OFF CACHE BOOL "")
-FetchContent_Declare(
-    googletest
-    GIT_REPOSITORY https://github.com/google/googletest.git
-    GIT_TAG v1.14.0
-)
-FetchContent_MakeAvailable(googletest)
+add_subdirectory(vendor/googletest)
+message(STATUS "  -> Loaded googletest")
 
-# spdlog (Modern C++ logging library)
-FetchContent_Declare(
-    spdlog
-    GIT_REPOSITORY https://github.com/gabime/spdlog.git
-    GIT_TAG v1.12.0
-)
-FetchContent_MakeAvailable(spdlog)
+# spdlog
+add_subdirectory(vendor/spdlog)
+message(STATUS "  -> Loaded spdlog")
 
-# tinyobjloader (Wavefront OBJ file loader)
-FetchContent_Declare(
-    tinyobjloader
-    GIT_REPOSITORY https://github.com/tinyobjloader/tinyobjloader.git
-    GIT_TAG v2.0.0rc13
-)
-FetchContent_MakeAvailable(tinyobjloader)
+# tinyobjloader
+# The CMakeLists for tinyobjloader allows disabling tests, which we don't need.
+set(TINYOBJLOADER_BUILD_TEST OFF CACHE BOOL "")
+add_subdirectory(vendor/tinyobjloader)
+message(STATUS "  -> Loaded tinyobjloader")
 
-# Assimp (Open Asset Import Library) for FBX and other formats
-# set(ASSIMP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-# set(ASSIMP_BUILD_ASSIMP_TOOLS OFF CACHE BOOL "" FORCE)
-# FetchContent_Declare(
-#     assimp
-#     GIT_REPOSITORY https://github.com/assimp/assimp.git
-#     GIT_TAG v5.4.1
-# )
-# FetchContent_MakeAvailable(assimp)
+# nlohmann/json
+# This is a header-only library, but add_subdirectory is the standard way
+# to make its INTERFACE target `nlohmann_json::nlohmann_json` available.
+set(JSON_BuildTests OFF CACHE BOOL "")
+add_subdirectory(vendor/json)
+message(STATUS "  -> Loaded nlohmann_json")
 
-message(STATUS "✅ External dependencies loaded: googletest, spdlog, tinyobjloader")
+message(STATUS "✅ All external dependencies loaded from submodules.")

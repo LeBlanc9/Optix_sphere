@@ -1,7 +1,7 @@
 #pragma once
 
-#include "core/optix_context.h"
-#include "core/device_buffer.h"
+#include "simulation/optix_context.h"
+#include "utils/device/device_buffer.cuh"
 #include "scene/scene_types.h"
 #include "simulation/device_params.h"
 #include "geometry/mesh_loader.h"

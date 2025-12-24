@@ -1,6 +1,6 @@
 #pragma once
 
-#include "core/device_buffer.h"
+#include "utils/device/device_buffer.cuh"
 #include "scene/scene.h"
 #include "optix_pipeline_builder.h"
 #include <optix.h>

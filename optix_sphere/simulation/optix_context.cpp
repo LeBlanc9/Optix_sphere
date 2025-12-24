@@ -1,5 +1,6 @@
 #include "optix_context.h"
-#include "device_buffer.h" // For CUDA_CHECK
+// #include "utils/dei/device_buffer.h" // For CUDA_CHECK
+#include "utils/device/core.cuh"
 #include <optix_function_table_definition.h>
 #include <spdlog/spdlog.h>
 

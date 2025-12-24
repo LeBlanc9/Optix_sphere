@@ -1,6 +1,6 @@
 #pragma once
 
-#include "core/optix_context.h"
+#include "simulation/optix_context.h"
 #include <optix.h>
 #include <string>
 #include <unordered_map>
