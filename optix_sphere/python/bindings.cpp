@@ -1,46 +1,42 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 #include <pybind11/numpy.h>
-#include <spdlog/spdlog.h> // Add spdlog header for log level control
+#include <spdlog/spdlog.h> // For spdlog::set_level
+#include <spdlog/common.h> // For spdlog::level::level_enum and spdlog::to_string_view
 
 #include "simulator.h" // New unified Simulator API
-#include "theory/theory.h"
+#include "theory/theory.h" // New theory API
 #include "constants.h"
 #include "photon/sources.h"     // New data-only source structs
 #include "photon/batch.h"       // For HostPhotonBatch
 
 namespace py = pybind11;
 using namespace phonder; // For PhotonSource, IsotropicPointSource etc.
+using namespace theory;  // For TheoryCalculator, TheoreticalIntegratingSphere, Port
 
 // C++ function to set spdlog level
-void set_log_level(const std::string& level_name) {
-    spdlog::level::level_enum level;
-    if (level_name == "trace") {
-        level = spdlog::level::trace;
-    } else if (level_name == "debug") {
-        level = spdlog::level::debug;
-    } else if (level_name == "info") {
-        level = spdlog::level::info;
-    } else if (level_name == "warn") {
-        level = spdlog::level::warn;
-    } else if (level_name == "error") {
-        level = spdlog::level::err);
-    } else if (level_name == "critical") {
-        level = spdlog::level::critical;
-    } else if (level_name == "off") {
-        level = spdlog::level::off;
-    } else {
-        spdlog::warn("Invalid log level: '{}'. Defaulting to 'info'.", level_name);
-        level = spdlog::level::info;
-    }
+// Now directly accepts spdlog::level::level_enum
+void set_log_level(spdlog::level::level_enum level) {
     spdlog::set_level(level);
-    spdlog::info("Global log level set to '{}'.", level_name);
+    spdlog::info("Global log level set to {}.", spdlog::to_string_view(level));
 }
 
 
 PYBIND11_MODULE(_core, m) {
     m.doc() = "OptiX Sphere - Monte Carlo simulation for integrating spheres";
     m.attr("__version__") = "0.1.0";
+
+    // Bind spdlog::level::level_enum for Python control
+    py::enum_<spdlog::level::level_enum>(m, "LogLevel", "Global logging levels for spdlog.")
+        .value("TRACE", spdlog::level::trace)
+        .value("DEBUG", spdlog::level::debug)
+        .value("INFO", spdlog::level::info)
+        .value("WARN", spdlog::level::warn)
+        .value("ERROR", spdlog::level::err)
+        .value("CRITICAL", spdlog::level::critical)
+        .value("OFF", spdlog::level::off)
+        .export_values(); // Exports values directly into the module (e.g., osg.INFO)
+
 
     // Bind common vector types
     py::class_<float3>(m, "float3")
@@ -84,14 +80,6 @@ PYBIND11_MODULE(_core, m) {
         .def_readonly("detected_rays", &SimulationResult::detected_rays)
         .def_readonly("avg_bounces", &SimulationResult::avg_bounces);
 
-    // Bind theory results
-    py::class_<TheoryResult>(m, "TheoryResult")
-        .def(py::init<>())
-        .def_readonly("avg_irradiance", &TheoryResult::avg_irradiance)
-        .def_readonly("detected_flux", &TheoryResult::detected_flux)
-        .def_readonly("sphere_area", &TheoryResult::sphere_area)
-        .def_readonly("total_flux_in_sphere", &TheoryResult::total_flux_in_sphere);
-
     // Bind the unified Simulator class
     py::class_<Simulator>(m, "Simulator")
         .def(py::init<>(), "Initializes the OptiX Simulator.")
@@ -104,6 +92,30 @@ PYBIND11_MODULE(_core, m) {
              "Runs the Monte Carlo simulation with the given photon source and simulation configuration.")
         .def("get_detector_total_area", &Simulator::get_detector_total_area,
              "Returns the total area of the detector in the currently built scene (mm^2).");
+
+    // Bind new theoretical model classes
+    py::class_<Port>(m, "Port")
+        .def(py::init<>(), "Default constructor.")
+        .def(py::init<float, float>(), py::arg("radius"), py::arg("reflectance"), "Constructs a Port with given radius and reflectance.")
+        .def_readwrite("radius", &Port::radius)
+        .def_readwrite("reflectance", &Port::reflectance);
+
+    py::class_<TheoreticalIntegratingSphere>(m, "TheoreticalIntegratingSphere")
+        .def(py::init<float, float>(), py::arg("radius"), py::arg("wall_reflectance"),
+             "Constructs a TheoreticalIntegratingSphere with internal radius and wall reflectance.")
+        .def("add_port", &TheoreticalIntegratingSphere::add_port, py::arg("radius"), py::arg("reflectance"),
+             "Adds a port to the sphere model with specified radius and reflectance.")
+        .def("get_radius", &TheoreticalIntegratingSphere::get_radius)
+        .def("get_wall_reflectance", &TheoreticalIntegratingSphere::get_wall_reflectance)
+        .def("get_total_sphere_area", &TheoreticalIntegratingSphere::get_total_sphere_area)
+        .def("get_effective_wall_reflectance", &TheoreticalIntegratingSphere::get_effective_wall_reflectance);
+    
+    // Bind TheoryCalculator class (static methods)
+    py::class_<TheoryCalculator>(m, "TheoryCalculator")
+        .def(py::init<>(), "Placeholder constructor to allow class instantiation in Python (optional for static methods).")
+        .def_static("calculate", &TheoryCalculator::calculate,
+                    py::arg("sphere_model"), py::arg("incident_power"),
+                    "Calculates the theoretical performance of an integrating sphere model.");
 
     // Bind the data-only source structs
     py::class_<IsotropicPointSource>(m, "IsotropicPointSource")
@@ -152,12 +164,12 @@ PYBIND11_MODULE(_core, m) {
     m.def("configure_detector_chord", &configure_detector_chord,
           py::arg("detector"), py::arg("sphere"), py::arg("port_hole_radius_mm"),
           "Configure detector position for chord surface geometry");
-
-    m.def("calculate_theory", &TheoryCalculator::calculateWithPorts,
-          py::arg("radius"), py::arg("reflectance"),
-          py::arg("incident_power"), py::arg("port_area"),
-          "Calculate theoretical result using Goebel formula");
           
+    // Bind the set_log_level function
+    m.def("set_log_level", &set_log_level,
+          py::arg("level"),
+          "Sets the global logging level. Use LogLevel enum (e.g., osg.LogLevel.INFO).");
+
 
     // 常量
     m.attr("PI") = PI;

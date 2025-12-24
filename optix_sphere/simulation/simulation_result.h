@@ -15,7 +15,6 @@ struct SimulationResult {
 // 理论结果
 struct TheoryResult {
     double avg_irradiance;       // 平均辐照度 (W/m²) - double精度
-    double detected_flux;        // 理论上探测器应接收的通量 (W) - double精度
     double sphere_area;          // 球面面积 (m²) - double精度
     double total_flux_in_sphere; // 球内总通量 - double精度
 };
