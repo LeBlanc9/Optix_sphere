@@ -6,7 +6,7 @@
 #include <spdlog/spdlog.h>
 #include "simulator.h" // <-- The new unified high-level API
 #include "photon/sources.h"
-#include "theory/theory.h"
+#include "theory/theory.h" // <-- New theory API
 #include "constants.h"
 
 namespace fs = std::filesystem;
@@ -45,14 +45,31 @@ int main() {
         simulator.build_scene_from_file(mesh_path.string(), scene_config);
 
         // --- Theoretical Calculation ---
-        // We can now get the detector area directly from the simulator API.
-        float detector_area_for_theory = simulator.get_detector_total_area();
-        TheoryResult theory_result = TheoryCalculator::calculateWithPorts(
-            50.0f, // Sphere radius is known for this model
-            scene_config.default_reflectance,
-            phonder::get_source_power(light_source),
-            detector_area_for_theory
+        // New object-oriented approach for theoretical sphere
+        float sphere_radius_for_theory = 50.0f; // Known from the mesh model's parameters
+        float wall_reflectance_for_theory = scene_config.default_reflectance;
+        float incident_power_for_theory = phonder::get_source_power(light_source);
+
+        // Create a theoretical sphere model
+        theory::TheoreticalIntegratingSphere theoretical_sphere_model(
+            sphere_radius_for_theory,
+            wall_reflectance_for_theory
         );
+
+        // Add the detector port to the theoretical model
+        float detector_area_for_theory = simulator.get_detector_total_area();
+        float detector_radius_for_theory = std::sqrt(detector_area_for_theory / PI);
+        theoretical_sphere_model.add_port(detector_radius_for_theory, 0.0f); // Assume 0 reflectance for detector port in theory
+
+        // Perform the theoretical calculation
+        TheoryResult theory_result = theory::TheoryCalculator::calculate(
+            theoretical_sphere_model,
+            incident_power_for_theory
+        );
+
+        // Manually calculate theoretical detected flux for comparison display
+        double theoretical_detected_flux = theory_result.avg_irradiance * detector_area_for_theory;
+
 
         // --- Run Simulations using the high-level API ---
         SimulationResult mesh_non_nee_result, mesh_nee_result;
@@ -75,13 +92,13 @@ int main() {
         auto duration_nee = std::chrono::duration_cast<std::chrono::milliseconds>(end_time_nee - start_time_nee);
         spdlog::info("  ✅ Mesh NEE took: {} ms", duration_nee.count());
 
-        // --- Print Results (this part remains the same) ---
+        // --- Print Results (adjusted for new TheoryResult) ---
         std::cout << "\n\n=== SIMULATION RESULTS & COMPARISON ===\n";
         std::cout << std::fixed << std::setprecision(6);
 
         std::cout << "\nTheory (Simplified Model):\n";
         std::cout << "  Irradiance:     " << theory_result.avg_irradiance << " W/mm²\n";
-        std::cout << "  Detected flux:  " << theory_result.detected_flux << " W\n";
+        std::cout << "  Detected flux:  " << theoretical_detected_flux << " W\n"; // Use manually calculated flux
 
         double mesh_non_nee_error = std::abs(mesh_non_nee_result.irradiance - theory_result.avg_irradiance)
                                     / theory_result.avg_irradiance * 100.0;
