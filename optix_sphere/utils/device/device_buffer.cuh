@@ -5,17 +5,7 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
-
-// CUDA 错误检查宏
-#define CUDA_CHECK(call)                                                      \
-    do {                                                                      \
-        cudaError_t error = call;                                             \
-        if (error != cudaSuccess) {                                           \
-            throw std::runtime_error("CUDA error at " + std::string(__FILE__) \
-                                     + ":" + std::to_string(__LINE__)         \
-                                     + " - " + cudaGetErrorString(error));    \
-        }                                                                     \
-    } while (0)
+#include "./core.cuh"
 
 /**
  * @brief A RAII wrapper for CUDA device memory management.

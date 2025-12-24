@@ -47,6 +47,13 @@ struct PortHoleSbtData {
     float3 center;      // 球心（可能不需要，但保持一致性）
 };
 
+// ============================================
+// SoA (Structure of Arrays) 光子数据
+// 用于高性能 GPU 数据驱动模拟
+// ============================================
+// 注意：我们统一使用 SoA 格式，不再使用 InputPhoton (AoS)
+// SoA 格式对 GPU 合并访问更友好
+
 // Data passed along with a ray
 struct RayPayload {
     float3 origin;
@@ -78,6 +85,14 @@ struct DeviceParams {
     unsigned int max_bounces;
     double power_per_ray;   // 使用double精度
     bool use_nee;           // 是否启用Next Event Estimation (NEE) 方差优化
+
+    // Data-driven mode (SoA format for GPU efficiency)
+    // 当这些指针非空时，raygen 从外部光源数据读取
+    const float3* photon_positions;         // 光子起始位置数组 (device pointer)
+    const float3* photon_directions;        // 光子起始方向数组 (device pointer)
+    const double* photon_weights;           // 光子权重数组 (device pointer)
+    unsigned long long photon_seed_base;  // 基础随机种子（每个光子 seed = base + idx * 97）
+    unsigned int num_input_photons;   // 输入光子数量
 
     // Scene objects
     // For a simple scene, we can pass small objects by value.

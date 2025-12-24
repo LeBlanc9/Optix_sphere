@@ -7,7 +7,7 @@ OptixSBTBuilder::OptixSBTBuilder() {
 }
 
 void OptixSBTBuilder::build_sbt(const OptixPipelineBuilder& pipeline_builder, const Scene& scene) {
-    create_raygen_record(pipeline_builder.get_program_group("__raygen__forward_trace"));
+    create_raygen_record(pipeline_builder.get_program_group("__raygen__data_driven"));
     create_miss_records(pipeline_builder.get_program_group("__miss__sphere"),
                        pipeline_builder.get_program_group("__miss__shadow"));
 

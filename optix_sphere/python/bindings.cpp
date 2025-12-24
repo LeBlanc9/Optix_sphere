@@ -1,135 +1,154 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 #include <pybind11/numpy.h>
+#include <spdlog/spdlog.h> // Add spdlog header for log level control
 
-#include "core/optix_context.h"
-#include "scene/scene.h"
-#include "simulation/path_tracer.h"
+#include "simulator.h" // New unified Simulator API
 #include "theory/theory.h"
-#include "scene/scene_types.h"
-#include "simulation_result.h"
 #include "constants.h"
-#include "embedded_ptx.h"  // 嵌入的 PTX 代码
+#include "photon/sources.h"     // New data-only source structs
+#include "photon/batch.h"       // For HostPhotonBatch
 
 namespace py = pybind11;
+using namespace phonder; // For PhotonSource, IsotropicPointSource etc.
 
-// Python包装器类，简化使用
-class Simulator {
-public:
-    Simulator() : context_(), scene_(context_) {
-        // OptiX 初始化在 OptixContext 构造函数中完成
+// C++ function to set spdlog level
+void set_log_level(const std::string& level_name) {
+    spdlog::level::level_enum level;
+    if (level_name == "trace") {
+        level = spdlog::level::trace;
+    } else if (level_name == "debug") {
+        level = spdlog::level::debug;
+    } else if (level_name == "info") {
+        level = spdlog::level::info;
+    } else if (level_name == "warn") {
+        level = spdlog::level::warn;
+    } else if (level_name == "error") {
+        level = spdlog::level::err);
+    } else if (level_name == "critical") {
+        level = spdlog::level::critical;
+    } else if (level_name == "off") {
+        level = spdlog::level::off;
+    } else {
+        spdlog::warn("Invalid log level: '{}'. Defaulting to 'info'.", level_name);
+        level = spdlog::level::info;
     }
+    spdlog::set_level(level);
+    spdlog::info("Global log level set to '{}'.", level_name);
+}
 
-    void setup_scene(const Sphere& sphere, const Detector& detector) {
-        sphere_ = sphere;
-        detector_ = detector;
-        scene_.build_scene(sphere, detector);
 
-        // 创建 PathTracer (使用嵌入的 PTX 代码)
-        tracer_ = std::make_unique<PathTracer>(context_, scene_, embedded::g_forward_tracer_ptx, true);
-    }
-
-    SimulationResult run(const SimConfig& config, const LightSource& light) {
-        if (!tracer_) {
-            throw std::runtime_error("Scene not set up. Call setup_scene() first.");
-        }
-        return tracer_->launch(config, light, detector_);
-    }
-
-private:
-    OptixContext context_;
-    Scene scene_;
-    std::unique_ptr<PathTracer> tracer_;
-    Sphere sphere_;
-    Detector detector_;
-};
-
-// Python 绑定模块
 PYBIND11_MODULE(_core, m) {
     m.doc() = "OptiX Sphere - Monte Carlo simulation for integrating spheres";
     m.attr("__version__") = "0.1.0";
 
-    // Sphere 类
+    // Bind common vector types
+    py::class_<float3>(m, "float3")
+        .def(py::init<float, float, float>())
+        .def_readwrite("x", &float3::x)
+        .def_readwrite("y", &float3::y)
+        .def_readwrite("z", &float3::z);
+
+    // Bind existing scene types
     py::class_<Sphere>(m, "Sphere")
         .def(py::init<>())
         .def_readwrite("center", &Sphere::center)
         .def_readwrite("radius", &Sphere::radius)
-        .def_readwrite("reflectance", &Sphere::reflectance)
-        .def("__repr__", [](const Sphere& s) {
-            return "<Sphere radius=" + std::to_string(s.radius) +
-                   " reflectance=" + std::to_string(s.reflectance) + ">";
-        });
+        .def_readwrite("reflectance", &Sphere::reflectance);
 
-    // LightSource 类
-    py::class_<LightSource>(m, "LightSource")
-        .def(py::init<>())
-        .def_readwrite("position", &LightSource::position)
-        .def_readwrite("power", &LightSource::power)
-        .def("__repr__", [](const LightSource& l) {
-            return "<LightSource power=" + std::to_string(l.power) + "W>";
-        });
-
-    // Detector 类
     py::class_<Detector>(m, "Detector")
         .def(py::init<>())
         .def_readwrite("position", &Detector::position)
         .def_readwrite("normal", &Detector::normal)
-        .def_readwrite("radius", &Detector::radius)
-        .def("__repr__", [](const Detector& d) {
-            return "<Detector radius=" + std::to_string(d.radius) + "mm>";
-        });
+        .def_readwrite("radius", &Detector::radius);
 
-    // SimConfig 类
+    // Bind new scene configuration structs
+    py::class_<MeshSceneConfig>(m, "MeshSceneConfig")
+        .def(py::init<>())
+        .def_readwrite("default_reflectance", &MeshSceneConfig::default_reflectance);
+
+    // Bind simulation configuration
     py::class_<SimConfig>(m, "SimConfig")
         .def(py::init<>())
         .def_readwrite("num_rays", &SimConfig::num_rays)
         .def_readwrite("max_bounces", &SimConfig::max_bounces)
         .def_readwrite("use_nee", &SimConfig::use_nee)
-        .def_readwrite("random_seed", &SimConfig::random_seed)
-        .def("__repr__", [](const SimConfig& c) {
-            return "<SimConfig num_rays=" + std::to_string(c.num_rays) +
-                   " max_bounces=" + std::to_string(c.max_bounces) + ">";
-        });
+        .def_readwrite("random_seed", &SimConfig::random_seed);
 
-    // SimulationResult 类
+    // Bind simulation results
     py::class_<SimulationResult>(m, "SimulationResult")
         .def(py::init<>())
         .def_readonly("detected_flux", &SimulationResult::detected_flux)
         .def_readonly("irradiance", &SimulationResult::irradiance)
         .def_readonly("total_rays", &SimulationResult::total_rays)
         .def_readonly("detected_rays", &SimulationResult::detected_rays)
-        .def_readonly("avg_bounces", &SimulationResult::avg_bounces)
-        .def("__repr__", [](const SimulationResult& r) {
-            return "<SimulationResult detected_flux=" + std::to_string(r.detected_flux) +
-                   "W irradiance=" + std::to_string(r.irradiance) + "W/mm²>";
-        });
+        .def_readonly("avg_bounces", &SimulationResult::avg_bounces);
 
-    // TheoryResult 类
+    // Bind theory results
     py::class_<TheoryResult>(m, "TheoryResult")
         .def(py::init<>())
         .def_readonly("avg_irradiance", &TheoryResult::avg_irradiance)
         .def_readonly("detected_flux", &TheoryResult::detected_flux)
         .def_readonly("sphere_area", &TheoryResult::sphere_area)
-        .def_readonly("total_flux_in_sphere", &TheoryResult::total_flux_in_sphere)
-        .def("__repr__", [](const TheoryResult& r) {
-            return "<TheoryResult avg_irradiance=" + std::to_string(r.avg_irradiance) +
-                   "W/mm²>";
-        });
+        .def_readonly("total_flux_in_sphere", &TheoryResult::total_flux_in_sphere);
 
-    // Simulator 类（主接口）
+    // Bind the unified Simulator class
     py::class_<Simulator>(m, "Simulator")
-        .def(py::init<>())
-        .def("setup_scene", &Simulator::setup_scene,
-             py::arg("sphere"), py::arg("detector"),
-             "Setup the simulation scene with sphere and detector")
+        .def(py::init<>(), "Initializes the OptiX Simulator.")
+        .def("build_scene_from_file", &Simulator::build_scene_from_file,
+             py::arg("file_path"), py::arg("config"),
+             "Builds the scene from an OBJ file using the provided mesh configuration. "
+             "The 'file_path' should be an absolute path to the .obj file.")
         .def("run", &Simulator::run,
-             py::arg("config"), py::arg("light"),
-             "Run the Monte Carlo simulation")
-        .def("__repr__", [](const Simulator&) {
-            return "<Simulator>";
-        });
+             py::arg("photon_source"), py::arg("config"),
+             "Runs the Monte Carlo simulation with the given photon source and simulation configuration.")
+        .def("get_detector_total_area", &Simulator::get_detector_total_area,
+             "Returns the total area of the detector in the currently built scene (mm^2).");
 
-    // 辅助函数
+    // Bind the data-only source structs
+    py::class_<IsotropicPointSource>(m, "IsotropicPointSource")
+        .def(py::init<>())
+        .def_readwrite("position", &IsotropicPointSource::position)
+        .def_readwrite("weight", &IsotropicPointSource::weight);
+
+    py::class_<CollimatedBeamSource>(m, "CollimatedBeamSource")
+        .def(py::init<>())
+        .def_readwrite("position", &CollimatedBeamSource::position)
+        .def_readwrite("direction", &CollimatedBeamSource::direction)
+        .def_readwrite("weight", &CollimatedBeamSource::weight);
+
+    py::class_<SpotSource>(m, "SpotSource")
+        .def(py::init<>())
+        .def_readwrite("center_position", &SpotSource::center_position)
+        .def_readwrite("direction", &SpotSource::direction)
+        .def_readwrite("radius", &SpotSource::radius)
+        .def_readwrite("weight", &SpotSource::weight);
+    
+    py::class_<GaussianBeamSource>(m, "GaussianBeamSource")
+        .def(py::init<>())
+        .def_readwrite("center_position", &GaussianBeamSource::center_position)
+        .def_readwrite("direction", &GaussianBeamSource::direction)
+        .def_readwrite("beam_waist", &GaussianBeamSource::beam_waist)
+        .def_readwrite("weight", &GaussianBeamSource::weight);
+
+    py::class_<FocusedSpotSource>(m, "FocusedSpotSource")
+        .def(py::init<>())
+        .def_readwrite("spot_center", &FocusedSpotSource::spot_center)
+        .def_readwrite("spot_radius", &FocusedSpotSource::spot_radius)
+        .def_readwrite("convergence_half_angle_rad", &FocusedSpotSource::convergence_half_angle_rad)
+        .def_readwrite("main_axis", &FocusedSpotSource::main_axis)
+        .def_readwrite("source_distance", &FocusedSpotSource::source_distance)
+        .def_readwrite("weight", &FocusedSpotSource::weight);
+
+    // HostPhotonBatch
+    py::class_<HostPhotonBatch>(m, "HostPhotonBatch")
+        .def(py::init<>())
+        .def("size", &HostPhotonBatch::size)
+        .def_property_readonly("positions", [](const HostPhotonBatch &b) { return py::array_t<float>(b.positions.size() * 3, reinterpret_cast<const float*>(b.positions.data())); })
+        .def_property_readonly("directions", [](const HostPhotonBatch &b) { return py::array_t<float>(b.directions.size() * 3, reinterpret_cast<const float*>(b.directions.data())); })
+        .def_property_readonly("weights", [](const HostPhotonBatch &b) { return py::array_t<double>(b.weights.size(), b.weights.data()); });
+
+
     m.def("configure_detector_chord", &configure_detector_chord,
           py::arg("detector"), py::arg("sphere"), py::arg("port_hole_radius_mm"),
           "Configure detector position for chord surface geometry");
@@ -138,6 +157,7 @@ PYBIND11_MODULE(_core, m) {
           py::arg("radius"), py::arg("reflectance"),
           py::arg("incident_power"), py::arg("port_area"),
           "Calculate theoretical result using Goebel formula");
+          
 
     // 常量
     m.attr("PI") = PI;
