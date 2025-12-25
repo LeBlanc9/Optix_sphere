@@ -1,10 +1,10 @@
 #include "layered_media/media_simulator.cuh"
 #include "layered_media/media_kernel.cuh"
-#include "photon/launchers.h" // New C-style launcher API
+#include "photon/launchers.h"
 #include <thrust/device_vector.h>
 #include <thrust/host_vector.h>
 #include <stdexcept>
-#include <algorithm> // For std::min
+#include <algorithm>
 
 namespace phonder {
 
@@ -35,18 +35,6 @@ static MediaSimulationDeviceResult _run_simulation(const MediaSimConfig& config,
     params.input_batch_size = num_photons;
     params.output_buffer_capacity = num_photons;
     
-    // The get_view() method now returns a non-const view, which is what the kernel needs
-    // But for an *input* batch, it should be const. Let's make it const.
-    // The issue is that the input_batch is passed as const, so get_view() must be const.
-    // And get_view() must return a view with const pointers.
-    // However, the kernel `media_simulation_kernel` takes a `const MediaKernelParams*`, 
-    // and its `input_batch` member is a `PhotonBatchView` with non-const pointers.
-    // This is a design flaw from the original code. Let's fix PhotonBatchView to use const pointers.
-    // And make get_view() return a const view.
-    // And make the kernel expect a const view.
-    // For now, I will assume the view has non-const pointers and the kernel is okay with it.
-    // This will likely cause a compile error, which I will fix next.
-    // 现在get_view()有const重载版本，可以安全调用
     params.input_batch = input_batch.get_view();
     
     // Pass writable raw pointers for output buffers
@@ -113,7 +101,6 @@ __host__ MediaSimulationDeviceResult MediaSimulator::run(int num_photons) {
     // For rapid subsequent calls, a better random seed source might be needed.
     unsigned long long seed = static_cast<unsigned long long>(time(nullptr)) + config_.gpu_id;
 
-    // Call the new C-style launcher function
     generate_photons_on_device(config_.source, input_batch, num_photons, seed);
     
     return _run_simulation(config_, input_batch);
