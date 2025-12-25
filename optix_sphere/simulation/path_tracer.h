@@ -9,6 +9,7 @@
 #include "optix_sbt_builder.h"
 #include "photon/sources.h"    // Data-only source definitions
 #include "photon/launchers.h"  // C++ API for generate_photons_on_device
+#include "photon/batch.h"      // For DevicePhotonBatch
 #include <memory>
 
 /**
@@ -32,15 +33,14 @@ public:
     PathTracer& operator=(const PathTracer&) = delete;
 
     /**
-     * @brief Launch simulation with data-driven photon source
+     * @brief Launch simulation with a pre-existing batch of photons on the GPU.
      * @param config Simulation configuration
-     * @param photon_source Photon source generator (e.g., IsotropicPointSource, SpotSource)
-     * @param detector Detector parameters
+     * @param input_batch A batch of photons already on the GPU (position, direction, weight).
      * @return Simulation result
      */
-    SimulationResult launch(
+    SimulationResult launch_from_batch(
         const SimConfig& config,
-        phonder::PhotonSource& photon_source);
+        const phonder::DevicePhotonBatch& input_batch);
 
 private:
     void initialize(bool from_file, const std::string& ptx_path_or_code);

@@ -39,7 +39,6 @@ int main() {
     media_config.medium = medium;
     media_config.source = source_params;
     media_config.gpu_id = 0;
-    // Optionally filter photons by radius
     // media_config.reflected_radius = 1.0f;
     // media_config.transmitted_radius = 1.0f;
 

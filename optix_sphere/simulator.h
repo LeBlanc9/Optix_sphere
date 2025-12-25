@@ -4,6 +4,8 @@
 #include <memory>
 #include "scene/scene_types.h" // Contains config structs
 #include "photon/sources.h"    // Data-only source definitions
+#include "photon/batch.h"      // For DevicePhotonBatch
+#include "photon/launchers.h"  // For generate_photons_on_device in implementation
 #include "simulation/simulation_result.h"
 
 
@@ -39,11 +41,22 @@ public:
 
     /**
      * @brief 运行蒙特卡洛仿真。
-     * @param source 光子源 (例如 IsotropicPointSource, CollimatedBeamSource等)。
+     *        光子源通过数学描述在GPU上生成。
+     * @param procedural_source 光子源的数学描述 (例如 IsotropicPointSource, CollimatedBeamSource等)。
      * @param config 通用的仿真运行配置 (光线数、反弹次数等)。
      * @return 仿真结果。
      */
-    SimulationResult run(phonder::PhotonSource& source, const SimConfig& config);
+    SimulationResult run(const phonder::PhotonSource& procedural_source, const SimConfig& config);
+
+    /**
+     * @brief 运行蒙特卡洛仿真。
+     *        使用一个预先在GPU上生成的光子批次作为输入。
+     * @param source_batch 预先在GPU上的光子批次。
+     * @param config 通用的仿真运行配置 (光线数、反弹次数等)。
+     * @return 仿真结果。
+     */
+    SimulationResult run(const phonder::DevicePhotonBatch& source_batch, const SimConfig& config);
+
 
     /**
      * @brief 获取当前场景中探测器的总面积 (mm²)。

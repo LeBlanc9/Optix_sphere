@@ -1,8 +1,10 @@
 #include "simulator.h"
 #include "simulation/optix_context.h"
 #include "scene/scene.h"
-#include "simulation/path_tracer.h"
+#include "simulation/path_tracer.h" // Now includes launch_from_batch
 #include "embedded_ptx.h"
+#include "photon/launchers.h" // For phonder::generate_photons_on_device
+#include "photon/batch.cuh" // Add this to define DevicePhotonBatch
 #include <spdlog/spdlog.h>
 #include <stdexcept>
 
@@ -67,37 +69,51 @@ void Simulator::build_scene_from_file(const std::string& file_path, const MeshSc
     pimpl_->create_tracer();
 }
 
-SimulationResult Simulator::run(phonder::PhotonSource& source, const SimConfig& config) {
-    // Ensure a scene has been built before running.
+// Overload 1: Takes an existing DevicePhotonBatch
+SimulationResult Simulator::run(const phonder::DevicePhotonBatch& source_batch, const SimConfig& config) {
     if (!pimpl_->scene_is_built_ || !pimpl_->tracer_) {
-        throw std::runtime_error("Simulation cannot be run before a scene is built. Call 'build_scene_from_file' or 'build_ideal_scene' first.");
+        throw std::runtime_error("Simulation cannot be run before a scene is built. Call 'build_scene_from_file' first.");
     }
-
-    spdlog::info("🚀 Launching simulation...");
-    spdlog::info("   Num rays: {}", config.num_rays);
+    spdlog::info("🚀 Launching simulation from existing DevicePhotonBatch...");
+    spdlog::info("   Num rays in batch: {}", source_batch.size());
     spdlog::info("   Max bounces: {}", config.max_bounces);
     spdlog::info("   Use NEE: {}", config.use_nee ? "Enabled" : "Disabled");
 
-    SimulationResult result = pimpl_->tracer_->launch(config, source);
+    SimulationResult result = pimpl_->tracer_->launch_from_batch(config, source_batch);
 
     spdlog::info("✅ Simulation complete.");
     spdlog::info("   Irradiance: {} W/mm²", result.irradiance);
     spdlog::info("   Detected flux: {} W", result.detected_flux);
+    return result;
+}
 
-        return result;
-
+// Overload 2: Takes a procedural PhotonSource (generates batch internally)
+SimulationResult Simulator::run(const phonder::PhotonSource& procedural_source, const SimConfig& config) {
+    if (!pimpl_->scene_is_built_ || !pimpl_->tracer_) {
+        throw std::runtime_error("Simulation cannot be run before a scene is built. Call 'build_scene_from_file' first.");
     }
+    spdlog::info("🚀 Launching simulation from procedural PhotonSource...");
+    spdlog::info("   Num rays (to generate): {}", config.num_rays);
+    spdlog::info("   Max bounces: {}", config.max_bounces);
+    spdlog::info("   Use NEE: {}", config.use_nee ? "Enabled" : "Disabled");
 
-    
+    phonder::DevicePhotonBatch d_batch;
+    phonder::generate_photons_on_device(procedural_source, d_batch, config.num_rays, config.random_seed);
 
-    float Simulator::get_detector_total_area() const {
-
-        if (!pimpl_->scene_is_built_ || !pimpl_->scene_) {
-
-            throw std::runtime_error("Cannot get detector area before a scene is built.");
-
-        }
-
-        return pimpl_->scene_->get_detector_total_area();
-
+    if (d_batch.empty()) {
+        spdlog::warn("Photon generation resulted in 0 photons. Aborting procedural launch.");
+        return {};
     }
+    spdlog::info("   Generated {} photons on GPU from procedural source.", d_batch.size());
+
+    // Now call the other run overload with the generated batch
+    return run(d_batch, config);
+}
+
+
+float Simulator::get_detector_total_area() const {
+    if (!pimpl_->scene_is_built_ || !pimpl_->scene_) {
+        throw std::runtime_error("Cannot get detector area before a scene is built.");
+    }
+    return pimpl_->scene_->get_detector_total_area();
+}

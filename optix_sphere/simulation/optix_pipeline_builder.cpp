@@ -120,28 +120,6 @@ void OptixPipelineBuilder::create_program_groups() {
     }
 
     // ============================================
-    // Analytical geometry hitgroups (custom primitives)
-    // ============================================
-    {
-        OptixProgramGroupDesc desc = {};
-        desc.kind = OPTIX_PROGRAM_GROUP_KIND_HITGROUP;
-        desc.hitgroup.moduleCH = module_;
-        desc.hitgroup.entryFunctionNameCH = "__closesthit__sphere";
-        desc.hitgroup.moduleIS = module_;
-        desc.hitgroup.entryFunctionNameIS = "__intersection__sphere";
-        create_and_register("__closesthit__sphere", desc);
-    }
-    {
-        OptixProgramGroupDesc desc = {};
-        desc.kind = OPTIX_PROGRAM_GROUP_KIND_HITGROUP;
-        desc.hitgroup.moduleAH = module_;
-        desc.hitgroup.entryFunctionNameAH = "__anyhit__sphere_shadow";
-        desc.hitgroup.moduleIS = module_;
-        desc.hitgroup.entryFunctionNameIS = "__intersection__sphere";
-        create_and_register("__anyhit__sphere_shadow", desc);
-    }
-
-    // ============================================
     // Physics-based material hitgroups
     // ============================================
     {
