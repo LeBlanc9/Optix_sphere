@@ -49,6 +49,7 @@ void OptixPipelineBuilder::create_module_from_string(const std::string& ptx_code
     module_compile_options.optLevel = OPTIX_COMPILE_OPTIMIZATION_DEFAULT;
     module_compile_options.debugLevel = OPTIX_COMPILE_DEBUG_LEVEL_MINIMAL;
 
+    pipeline_compile_options_ = {};
     pipeline_compile_options_.usesMotionBlur = false;
     pipeline_compile_options_.traversableGraphFlags = OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_GAS;
     pipeline_compile_options_.numPayloadValues = 2; // Using 64-bit pointer passing (2x 32-bit values)
@@ -117,6 +118,28 @@ void OptixPipelineBuilder::create_program_groups() {
         desc.miss.module = module_;
         desc.miss.entryFunctionName = "__miss__shadow";
         create_and_register("__miss__shadow", desc);
+    }
+
+    // ============================================
+    // Analytical geometry hitgroups (custom primitives)
+    // ============================================
+    {
+        OptixProgramGroupDesc desc = {};
+        desc.kind = OPTIX_PROGRAM_GROUP_KIND_HITGROUP;
+        desc.hitgroup.moduleCH = module_;
+        desc.hitgroup.entryFunctionNameCH = "__closesthit__sphere";
+        desc.hitgroup.moduleIS = module_;
+        desc.hitgroup.entryFunctionNameIS = "__intersection__sphere";
+        create_and_register("__closesthit__sphere", desc);
+    }
+    {
+        OptixProgramGroupDesc desc = {};
+        desc.kind = OPTIX_PROGRAM_GROUP_KIND_HITGROUP;
+        desc.hitgroup.moduleAH = module_;
+        desc.hitgroup.entryFunctionNameAH = "__anyhit__sphere_shadow";
+        desc.hitgroup.moduleIS = module_;
+        desc.hitgroup.entryFunctionNameIS = "__intersection__sphere";
+        create_and_register("__anyhit__sphere_shadow", desc);
     }
 
     // ============================================

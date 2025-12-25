@@ -18,7 +18,7 @@ using namespace theory;  // For TheoryCalculator, TheoreticalIntegratingSphere, 
 // Now directly accepts spdlog::level::level_enum
 void set_log_level(spdlog::level::level_enum level) {
     spdlog::set_level(level);
-    spdlog::info("Global log level set to {}.", spdlog::to_string_view(level));
+    spdlog::info("Global log level set to {}.", spdlog::level::to_string_view(level));
 }
 
 
@@ -80,6 +80,13 @@ PYBIND11_MODULE(_core, m) {
         .def_readonly("detected_rays", &SimulationResult::detected_rays)
         .def_readonly("avg_bounces", &SimulationResult::avg_bounces);
 
+    // Bind TheoryResult class
+    py::class_<TheoryResult>(m, "TheoryResult")
+        .def(py::init<>()) // Add default constructor for Python
+        .def_readonly("avg_irradiance", &TheoryResult::avg_irradiance)
+        .def_readonly("sphere_area", &TheoryResult::sphere_area)
+        .def_readonly("total_flux_in_sphere", &TheoryResult::total_flux_in_sphere);
+
     // Bind the unified Simulator class
     py::class_<Simulator>(m, "Simulator")
         .def(py::init<>(), "Initializes the OptiX Simulator.")
@@ -87,7 +94,7 @@ PYBIND11_MODULE(_core, m) {
              py::arg("file_path"), py::arg("config"),
              "Builds the scene from an OBJ file using the provided mesh configuration. "
              "The 'file_path' should be an absolute path to the .obj file.")
-        .def("run", &Simulator::run,
+        .def("run", static_cast<SimulationResult (Simulator::*)(const phonder::PhotonSource&, const SimConfig&)>(&Simulator::run),
              py::arg("photon_source"), py::arg("config"),
              "Runs the Monte Carlo simulation with the given photon source and simulation configuration.")
         .def("get_detector_total_area", &Simulator::get_detector_total_area,
