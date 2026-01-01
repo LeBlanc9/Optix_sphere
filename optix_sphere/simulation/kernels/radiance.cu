@@ -1,5 +1,28 @@
 #include "kernel_utils.cuh"
 
+// ============================================
+// Helper function: Compute triangle geometric normal
+// ============================================
+__device__ __forceinline__ float3 compute_triangle_normal() {
+    // Get the primitive index (triangle index)
+    unsigned int prim_idx = optixGetPrimitiveIndex();
+
+    // Get triangle indices
+    uint3 indices = params.index_buffer[prim_idx];
+
+    // Get triangle vertices
+    float3 v0 = params.vertex_buffer[indices.x];
+    float3 v1 = params.vertex_buffer[indices.y];
+    float3 v2 = params.vertex_buffer[indices.z];
+
+    // Compute edges
+    float3 edge1 = v1 - v0;
+    float3 edge2 = v2 - v0;
+
+    // Compute normal via cross product
+    return normalize(cross(edge1, edge2));
+}
+
 // 探测器命中程序（简单：记录能量并终止）
 extern "C" __global__ void __closesthit__detector() {
     unsigned long long payload_ptr = static_cast<unsigned long long>(optixGetPayload_0()) |
@@ -134,7 +157,7 @@ extern "C" __global__ void __miss__sphere() {
 // Supports variable reflectance (0-1) for walls, baffles, etc.
 // NEE is controlled globally via params.use_nee
 extern "C" __global__ void __closesthit__lambertian() {
-    // SBT data contains reflectance and sphere center
+    // SBT data contains reflectance
     const SphereWallSbtData* material = (SphereWallSbtData*)optixGetSbtDataPointer();
     unsigned long long payload_ptr = static_cast<unsigned long long>(optixGetPayload_0()) |
                                      (static_cast<unsigned long long>(optixGetPayload_1()) << 32);
@@ -146,8 +169,8 @@ extern "C" __global__ void __closesthit__lambertian() {
     float3 ray_dir = optixGetWorldRayDirection();
     float3 hit_point = ray_orig + t_hit * ray_dir;
 
-    // Spherical normal: from sphere center to hit point
-    float3 geometric_normal = normalize(hit_point - material->center);
+    // Compute triangle geometric normal
+    float3 geometric_normal = compute_triangle_normal();
 
     // Ensure normal faces the ray origin (interior reflection)
     float3 shading_normal = dot(ray_dir, geometric_normal) < 0 ? geometric_normal : -geometric_normal;
@@ -232,3 +255,111 @@ extern "C" __global__ void __closesthit__absorber() {
     // 完全吸收，光线终止
     payload->active = 0;
 }
+
+// Mixed material (diffuse + specular)
+// Combines Lambertian scattering with specular reflection
+// Randomly chooses between the two based on configured ratios
+extern "C" __global__ void __closesthit__mixed() {
+    const MixedMaterialSbtData* material = (MixedMaterialSbtData*)optixGetSbtDataPointer();
+    unsigned long long payload_ptr = static_cast<unsigned long long>(optixGetPayload_0()) |
+                                     (static_cast<unsigned long long>(optixGetPayload_1()) << 32);
+    RayPayload* payload = reinterpret_cast<RayPayload*>(payload_ptr);
+
+    // Get hit point
+    float t_hit = optixGetRayTmax();
+    float3 ray_orig = optixGetWorldRayOrigin();
+    float3 ray_dir = optixGetWorldRayDirection();
+    float3 hit_point = ray_orig + t_hit * ray_dir;
+
+    // Compute triangle geometric normal
+    float3 geometric_normal = compute_triangle_normal();
+
+    // Ensure normal faces the ray origin (interior reflection)
+    float3 shading_normal = dot(ray_dir, geometric_normal) < 0 ? geometric_normal : -geometric_normal;
+
+    // Next Event Estimation (NEE): explicit detector sampling
+    // For mixed materials, we use the weighted average BRDF for NEE
+    if (params.use_nee) {
+        float3 to_detector = params.detector.position - hit_point;
+        float distance = length(to_detector);
+        float3 dir_to_detector = to_detector * (1.0f / distance);
+
+        float cos_theta_surface = dot(dir_to_detector, shading_normal);
+        if (cos_theta_surface > 0.0f) {
+            float cos_theta_detector = dot(-dir_to_detector, params.detector.normal);
+
+            if (cos_theta_detector > 0.0f) {
+                float detector_area = M_PIf * params.detector.radius * params.detector.radius;
+                float geometric_factor = (detector_area * cos_theta_detector) / (distance * distance);
+
+                // Mixed BRDF: weighted combination of diffuse and specular
+                // For simplicity in NEE, we use the diffuse component only
+                // (specular reflection is delta function, negligible probability of hitting detector)
+                double brdf_cosine = (material->diffuse_ratio * material->reflectance) * INV_PI * cos_theta_surface;
+                double nee_contribution = payload->weight * brdf_cosine * geometric_factor;
+
+                // Shadow ray for visibility test
+                ShadowPayload shadow_payload;
+                shadow_payload.occluded = false;
+
+                unsigned long long shadow_ptr = reinterpret_cast<unsigned long long>(&shadow_payload);
+                unsigned int s0 = static_cast<unsigned int>(shadow_ptr);
+                unsigned int s1 = static_cast<unsigned int>(shadow_ptr >> 32);
+
+                optixTrace(
+                    params.traversable,
+                    hit_point + shading_normal * 1e-4f,
+                    dir_to_detector,
+                    1e-4f,
+                    distance - 1e-4f,
+                    0.0f,
+                    OptixVisibilityMask(255),
+                    OPTIX_RAY_FLAG_TERMINATE_ON_FIRST_HIT,
+                    4,  // SBT offset (shadow records start at index 4)
+                    1,  // SBT stride = 1
+                    1,  // missSBTIndex
+                    s0, s1
+                );
+
+                if (!shadow_payload.occluded) {
+                    atomicAdd(params.flux_buffer, nee_contribution);
+                }
+            }
+        }
+    }
+
+    // Bounce count check & Russian roulette
+    atomicAdd(params.total_bounces_buffer, 1ull);
+    payload->bounce_count++;
+    if (payload->bounce_count >= params.max_bounces) {
+        payload->active = 0;
+        return;
+    }
+
+    // Russian roulette based on total material reflectance
+    float survival_prob = material->reflectance;
+    if (random_float(&payload->seed) > survival_prob) {
+        payload->active = 0;
+        return;
+    }
+
+    // Randomly choose between diffuse and specular reflection
+    float choice = random_float(&payload->seed);
+    float3 new_direction;
+
+    if (choice < material->diffuse_ratio) {
+        // Diffuse (Lambertian) scattering
+        new_direction = sample_lambertian(shading_normal, &payload->seed);
+    } else {
+        // Specular reflection: r = d - 2(d·n)n
+        new_direction = ray_dir - 2.0f * dot(ray_dir, shading_normal) * shading_normal;
+        new_direction = normalize(new_direction);
+    }
+
+    // Update ray state for next bounce
+    payload->weight *= material->reflectance / survival_prob;
+    payload->origin = hit_point + shading_normal * 1e-3f;
+    payload->direction = new_direction;
+    payload->active = 1;
+}
+

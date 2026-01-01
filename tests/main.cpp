@@ -4,10 +4,11 @@
 #include <chrono>
 #include <filesystem>
 #include <spdlog/spdlog.h>
-#include "simulator.h" // <-- The new unified high-level API
+#include "simulator.h"
 #include "photon/sources.h"
-#include "theory/theory.h" // <-- New theory API
+#include "theory/theory.h"
 #include "constants.h"
+#include "material.h"
 
 namespace fs = std::filesystem;
 
@@ -39,19 +40,24 @@ int main() {
         Simulator simulator;
 
         // Configure and build the scene from a file
-        // fs::path mesh_path = fs::path("E:/workspace/Optix_sphere/assets") / "integrating_sphere_0.3.obj";
-        // fs::path mesh_path = fs::path("E:/workspace/Optix_sphere/assets") / "integrating_sphere_25.4_5.obj";
-        fs::path mesh_path = fs::path("E:/workspace/Optix_sphere/assets") / "integrating_sphere_25.4_ideal.obj";
+        fs::path mesh_path = fs::path("E:/workspace/Optix_sphere/assets/port_thickness") / "integrating_sphere_25.4_5.obj";
+
+        // === NEW: Define custom materials using factory functions ===
+        const float wall_reflectance = 0.99f;
+        using namespace material;
+        std::map<std::string, MaterialFactory> materials;
+        // materials["wall_material"] = mixed(0.7f, 0.3f, 0.99f);
+        materials["wall_material"] = lambertian(wall_reflectance);
+        materials["detector_material"] = detector();
+
         MeshSceneConfig scene_config;
-        scene_config.default_reflectance = 0.99f;
-        
-        simulator.build_scene_from_file(mesh_path.string(), scene_config);
+        simulator.build_scene_from_file(mesh_path.string(), materials, scene_config);
 
         // --- Theoretical Calculation ---
         // New object-oriented approach for theoretical sphere
         // float sphere_radius_for_theory = 50.0f;
         float sphere_radius_for_theory = 152.4f / 2.0f;
-        float wall_reflectance_for_theory = scene_config.default_reflectance;
+        float wall_reflectance_for_theory = wall_reflectance;
         float incident_power_for_theory = phonder::get_source_power(light_source);
 
         // Create a theoretical sphere model

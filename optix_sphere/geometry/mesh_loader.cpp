@@ -2,29 +2,15 @@
 #include <tiny_obj_loader.h>
 #include <spdlog/spdlog.h>
 #include <stdexcept>
-#include <unordered_map>
+#include <map>
 
-std::unordered_map<std::string, MaterialType> MeshLoader::get_default_material_mapping() {
-    return {
-        // 标准名称
-        {"Sphere_Wall", MaterialType::SphereWall},
-        {"SphereWall", MaterialType::SphereWall},
-        {"Detector", MaterialType::Detector},
-        {"Baffle", MaterialType::Baffle},
-        {"Port_Hole", MaterialType::PortHole},
-        {"PortHole", MaterialType::PortHole},
-
-        // 常见别名
-        {"wall_material", MaterialType::SphereWall},
-        {"detector_material", MaterialType::Detector},
-        {"baffle_material", MaterialType::Baffle},
-        {"porthole_material", MaterialType::PortHole},
-    };
+std::map<std::string, MaterialFactory> MeshLoader::get_default_materials() {
+    return material::get_default_materials();
 }
 
 LoadedMesh MeshLoader::load_obj(
     const std::string& filepath,
-    const std::unordered_map<std::string, MaterialType>& material_mapping
+    const std::map<std::string, MaterialFactory>& material_factories
 ) {
     spdlog::info("Loading OBJ file: {}", filepath);
 
@@ -58,7 +44,29 @@ LoadedMesh MeshLoader::load_obj(
                  attrib.vertices.size() / 3, shapes.size(), materials.size());
 
     LoadedMesh mesh;
-    mesh.material_map = material_mapping;
+
+    // Build material index mapping
+    // Map: OBJ material name -> our internal material index
+    std::map<std::string, int> material_name_to_index;
+
+    for (const auto& obj_mat : materials) {
+        std::string mat_name = obj_mat.name;
+
+        // Check if this material name has a factory
+        auto factory_it = material_factories.find(mat_name);
+        if (factory_it != material_factories.end()) {
+            // Check if we've already added this material
+            if (material_name_to_index.find(mat_name) == material_name_to_index.end()) {
+                int new_index = static_cast<int>(mesh.material_factories.size());
+                material_name_to_index[mat_name] = new_index;
+                mesh.material_factories.push_back({mat_name, factory_it->second});
+                spdlog::debug("Material '{}' -> index {}", mat_name, new_index);
+            }
+        } else {
+            spdlog::warn("Material '{}' not found in material factories, will use first available material as fallback", mat_name);
+            // We don't add this material, faces using it will fall back to index 0
+        }
+    }
 
     // 遍历所有形状（shapes）
     for (const auto& shape : shapes) {
@@ -78,20 +86,26 @@ LoadedMesh MeshLoader::load_obj(
             // 获取该三角形的材质 ID
             int material_id = shape.mesh.material_ids[f];
 
-            // 确定材质类型
-            MaterialType mat_type = MaterialType::Unknown;
+            // 确定材质索引
+            int mat_index = 0;  // Default to first material
             if (material_id >= 0 && material_id < static_cast<int>(materials.size())) {
                 std::string mat_name = materials[material_id].name;
-                auto it = material_mapping.find(mat_name);
-                if (it != material_mapping.end()) {
-                    mat_type = it->second;
-                } else {
-                    spdlog::warn("Unknown material '{}', treating as SphereWall", mat_name);
-                    mat_type = MaterialType::SphereWall;
+                auto it = material_name_to_index.find(mat_name);
+                if (it != material_name_to_index.end()) {
+                    mat_index = it->second;
                 }
             } else {
-                spdlog::warn("Face {} has no material assigned, treating as SphereWall", f);
-                mat_type = MaterialType::SphereWall;
+                // Face has no material assigned in OBJ file
+                // Use the first available material as default
+                if (!mesh.material_factories.empty()) {
+                    mat_index = 0;  // Use first material
+                }
+                // Only warn once (on first occurrence)
+                static bool warned_once = false;
+                if (!warned_once) {
+                    spdlog::warn("Some faces have no material assigned in OBJ, using first material as default");
+                    warned_once = true;
+                }
             }
 
             // 存储三角形的三个顶点
@@ -127,29 +141,29 @@ LoadedMesh MeshLoader::load_obj(
             }
 
             mesh.indices.push_back(triangle_indices);
-            mesh.triangle_materials.push_back({mat_type, material_id});
+            mesh.triangle_materials.push_back(mat_index);
 
             index_offset += fv;
         }
     }
 
-    spdlog::info("✅ Processed mesh: {} vertices, {} triangles",
-                 mesh.vertices.size(), mesh.indices.size());
+    spdlog::info("✅ Processed mesh: {} vertices, {} triangles, {} materials",
+                 mesh.vertices.size(), mesh.indices.size(), mesh.material_factories.size());
 
     // 统计各材质的三角形数量
-    std::unordered_map<MaterialType, int> mat_counts;
-    for (const auto& tri_mat : mesh.triangle_materials) {
-        mat_counts[tri_mat.type]++;
+    std::map<int, int> mat_counts;
+    for (int mat_idx : mesh.triangle_materials) {
+        mat_counts[mat_idx]++;
     }
 
     spdlog::info("Material distribution:");
-    const char* mat_names[] = {"SphereWall", "Detector", "Baffle", "PortHole", "Unknown"};
-    for (const auto& [mat_type, count] : mat_counts) {
-        int mat_idx = static_cast<int>(mat_type);
-        if (mat_idx >= 0 && mat_idx < 5) {
-            spdlog::info("  {}: {} triangles", mat_names[mat_idx], count);
+    for (const auto& [mat_idx, count] : mat_counts) {
+        if (mat_idx < static_cast<int>(mesh.material_factories.size())) {
+            const auto& [name, factory] = mesh.material_factories[mat_idx];
+            spdlog::info("  [{}] {}: {} triangles", mat_idx, name, count);
         }
     }
 
     return mesh;
 }
+

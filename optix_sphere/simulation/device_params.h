@@ -25,7 +25,7 @@ struct DiskSbtData {
 // SBT data for normal sphere wall (high reflectance)
 struct SphereWallSbtData {
     float reflectance;  // 反射率 (e.g., 0.98)
-    float3 center;      // 球心（用于计算法线）
+    // Note: center removed - now using triangle geometric normals
 };
 
 // SBT data for detector surface
@@ -39,12 +39,21 @@ struct DetectorSbtData {
 // SBT data for baffle (low reflectance)
 struct BaffleSbtData {
     float reflectance;  // 低反射率 (e.g., 0.1-0.3)
-    float3 center;      // 球心
+    // Note: center removed - now using triangle geometric normals
 };
 
 // SBT data for port hole (complete absorption)
 struct PortHoleSbtData {
-    float3 center;      // 球心（可能不需要，但保持一致性）
+    // Empty - absorber doesn't need any parameters
+    int dummy;  // Prevent empty struct
+};
+
+// SBT data for mixed material (diffuse + specular)
+struct MixedMaterialSbtData {
+    float diffuse_ratio;   // Lambertian 散射比例 (0-1)
+    float specular_ratio;  // 镜面反射比例 (0-1)
+    float reflectance;     // 总反射率 (0-1)
+    // Note: center removed - now using triangle geometric normals
 };
 
 // ============================================
@@ -73,6 +82,10 @@ struct ShadowPayload {
 struct DeviceParams {
     // Scene geometry
     OptixTraversableHandle traversable;
+
+    // Triangle mesh data (for computing geometric normals)
+    const float3* vertex_buffer;   // Vertex positions (device pointer)
+    const uint3* index_buffer;     // Triangle indices (device pointer)
 
     // Statistic gathering
     double* flux_buffer;

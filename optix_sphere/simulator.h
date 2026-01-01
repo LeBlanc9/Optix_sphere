@@ -2,11 +2,13 @@
 
 #include <string>
 #include <memory>
+#include <map>
 #include "scene/scene_types.h" // Contains config structs
 #include "photon/sources.h"    // Data-only source definitions
 #include "photon/batch.h"      // For DevicePhotonBatch
 #include "photon/launchers.h"  // For generate_photons_on_device in implementation
 #include "simulation/simulation_result.h"
+#include "material.h"          // For MaterialDescriptor
 
 
 /**
@@ -35,6 +37,31 @@ public:
      * @param config 场景的物理和材质配置。
      */
     void build_scene_from_file(const std::string& file_path, const MeshSceneConfig& config);
+
+    /**
+     * @brief 从.obj文件构建一个基于网格的场景，使用自定义材质工厂。
+     * @param file_path .obj文件的路径。
+     * @param material_factories 材质名称到 MaterialFactory 的映射（OBJ 材质名 -> 材质工厂函数）。
+     * @param config 场景的物理配置。
+     *
+     * @example
+     * ```cpp
+     * // 创建自定义材质
+     * using namespace material;
+     * std::map<std::string, MaterialFactory> materials;
+     *
+     * materials["wall_material"] = mixed(0.7, 0.3, 0.98);
+     * materials["detector_material"] = detector();
+     *
+     * // 使用自定义材质构建场景
+     * simulator.build_scene_from_file(mesh_path, materials, config);
+     * ```
+     */
+    void build_scene_from_file(
+        const std::string& file_path,
+        const std::map<std::string, MaterialFactory>& material_factories,
+        const MeshSceneConfig& config
+    );
 
 
     // --- Simulation Execution ---

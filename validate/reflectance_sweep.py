@@ -18,13 +18,19 @@ def run_simulation(simulator, reflectance, sim_config, source, mesh_path):
     Builds the scene with a specific reflectance and runs the simulation.
     """
     mesh_config = osg.MeshSceneConfig()
-    mesh_config.default_reflectance = reflectance
-    
-    simulator.build_scene_from_file(mesh_path, mesh_config)
-    
+
+    # Create materials with the specified reflectance
+    materials = {
+        "wall_material": osg.material.lambertian(reflectance),
+        # "wall_material": osg.material.mixed(0.85, 0.15, reflectance),
+        "detector_material": osg.material.detector()
+    }
+
+    simulator.build_scene_from_file(mesh_path, materials, mesh_config)
+
     sim_config.use_nee = True
     result = simulator.run(source, sim_config)
-    
+
     return result
 
 # --- Helper function to run a theoretical calculation ---
@@ -65,10 +71,8 @@ def run_wall_reflectance_sweep():
     try:
         script_dir = os.path.dirname(os.path.abspath(__file__))
         project_root = os.path.dirname(script_dir)
-        # mesh_path = os.path.join(project_root, "assets", "integrating_sphere_0.3.obj")
-        # mesh_path = os.path.join(project_root, "assets", "integrating_sphere_25.4_1.obj")
-        # mesh_path = os.path.join(project_root, "assets", "integrating_sphere_25.4_5.obj")
-        mesh_path = os.path.join(project_root, "assets", "integrating_sphere_25.4_ideal.obj")
+        input_filename = "integrating_sphere_25.4_0.01_4-baffle"
+        mesh_path = os.path.join(project_root, "assets", "baffle", f"{input_filename}.obj")
         if not os.path.exists(mesh_path):
             raise FileNotFoundError(f"Asset not found at '{mesh_path}'.")
     except Exception as e:
@@ -79,8 +83,14 @@ def run_wall_reflectance_sweep():
     simulator = osg.Simulator()
     print("Performing initial build to get detector geometry...")
     initial_mesh_config = osg.MeshSceneConfig()
-    initial_mesh_config.default_reflectance = 0.98
-    simulator.build_scene_from_file(mesh_path, initial_mesh_config)
+
+    # Create initial materials for getting detector geometry
+    initial_materials = {
+        "wall_material": osg.material.lambertian(0.98),
+        "detector_material": osg.material.detector()
+    }
+
+    simulator.build_scene_from_file(mesh_path, initial_materials, initial_mesh_config)
     detector_area = simulator.get_detector_total_area()
     print(f"  -> Detector Area from mesh: {detector_area:.4f} mm²")
 
@@ -124,7 +134,7 @@ def run_wall_reflectance_sweep():
     df = pd.DataFrame(results)
     df['relative_error_%'] = 100 * (df['simulation_flux_mean'] - df['theory_flux']) / df['theory_flux']
 
-    output_filename = "sweep_reflectance.csv"
+    output_filename = f"{input_filename}.csv"
     df.to_csv(output_filename, index=False)
     
     print("\n--- Sweep Complete ---")

@@ -5,6 +5,7 @@
 #include "embedded_ptx.h"
 #include "photon/launchers.h" // For phonder::generate_photons_on_device
 #include "photon/batch.cuh" // Add this to define DevicePhotonBatch
+#include "geometry/mesh_loader.h" // For MeshLoader::get_default_material_configs
 #include <spdlog/spdlog.h>
 #include <stdexcept>
 
@@ -47,22 +48,29 @@ Simulator::Simulator() : pimpl_(std::make_unique<Pimpl>()) {
 Simulator::~Simulator() = default; // Default destructor is fine with unique_ptr<Pimpl>
 
 void Simulator::build_scene_from_file(const std::string& file_path, const MeshSceneConfig& config) {
+    // Use default material factories
+    auto material_factories = MeshLoader::get_default_materials();
+    build_scene_from_file(file_path, material_factories, config);
+}
+
+void Simulator::build_scene_from_file(
+    const std::string& file_path,
+    const std::map<std::string, MaterialFactory>& material_factories,
+    const MeshSceneConfig& config
+) {
     spdlog::info("Attempting to build scene from file: {}", file_path);
-    
+
     // Create the scene object.
     pimpl_->scene_ = std::make_unique<Scene>(pimpl_->context_);
 
-    // In this simplified API, we create a temporary Sphere object to pass
-    // the reflectance, as the underlying `build_scene` method requires it.
+    // Create a temporary Sphere object for the center coordinate.
+    // Material properties are now defined by MaterialFactory, not by this sphere.
     Sphere sphere_geom;
-    sphere_geom.reflectance = config.default_reflectance;
-    // The radius and center will be ignored by this `build_scene` overload,
-    // but we set them for completeness.
     sphere_geom.radius = -1.0f; // Indicates it's not an ideal sphere
     sphere_geom.center = {0.0f, 0.0f, 0.0f};
 
-    // Build the scene from the mesh file.
-    pimpl_->scene_->build_scene(file_path, sphere_geom);
+    // Build the scene from the mesh file with custom material factories.
+    pimpl_->scene_->build_scene(file_path, material_factories, sphere_geom);
     spdlog::info("✅ Scene built successfully from file.");
 
     // Now that the scene exists, create the path tracer.

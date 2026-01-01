@@ -27,13 +27,25 @@ public:
      */
     void build_scene(const std::string& mesh_path, const Sphere& sphere_params);
 
+    /**
+     * Build scene from triangle mesh file with custom material factories
+     * @param mesh_path Path to the OBJ mesh file
+     * @param material_factories Map of OBJ material names to MaterialFactory
+     * @param sphere_params Sphere parameters (center for geometry calculations)
+     */
+    void build_scene(
+        const std::string& mesh_path,
+        const std::map<std::string, MaterialFactory>& material_factories,
+        const Sphere& sphere_params
+    );
+
     OptixTraversableHandle get_traversable() const { return traversable_; }
 
     /**
      * Get materials for SBT construction
      * Returns vector of materials in order corresponding to MaterialType enum
      */
-    const std::vector<std::unique_ptr<Material>>& get_materials() const { return materials_; }
+    const std::vector<std::shared_ptr<Material>>& get_materials() const { return materials_; }
 
     /**
      * Get detector parameters extracted from mesh
@@ -43,6 +55,17 @@ public:
     float3 get_detector_normal() const { return detector_normal_; }
     float get_detector_radius() const { return detector_radius_; }
     float get_detector_total_area() const { return detector_total_area_; }
+
+    /**
+     * Get vertex and index buffers for triangle normal calculation
+     * These are used in closest-hit shaders to compute geometric normals
+     */
+    const float3* get_vertex_buffer_ptr() const {
+        return reinterpret_cast<const float3*>(vertex_buffer_.get_cu_ptr());
+    }
+    const uint3* get_index_buffer_ptr() const {
+        return reinterpret_cast<const uint3*>(index_buffer_.get_cu_ptr());
+    }
 
 private:
     const OptixContext& context_;
@@ -56,7 +79,7 @@ private:
     DeviceBuffer index_buffer_;
 
     // Material system - polymorphic materials for different surface types
-    std::vector<std::unique_ptr<Material>> materials_;
+    std::vector<std::shared_ptr<Material>> materials_;
 
     // Extracted detector parameters (from mesh) for NEE
     float3 detector_position_ = {0, 0, 0};

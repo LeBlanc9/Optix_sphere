@@ -5,12 +5,12 @@ import os
 def main():
     print("--- Python Mesh-Based Simulation ---")
 
-    osg.set_log_level("warn")
+    osg.set_log_level(osg.LogLevel.WARN)
 
 
     # --- Configuration (Hardcoded as per user's request) ---
     sim_config = osg.SimConfig()
-    sim_config.num_rays = 1_000_000
+    sim_config.num_rays = 2_000_000
     sim_config.max_bounces = 500
     sim_config.use_nee = True
 
@@ -19,16 +19,20 @@ def main():
     source.weight = 1.0
 
     mesh_config = osg.MeshSceneConfig()
-    mesh_config.default_reflectance = 0.98
+
+    materials = {}
+    # materials["wall_material"] = osg.material.mixed(0.7, 0.3, 0.99)
+    materials["wall_material"] = osg.material.lambertian(0.99)
+    materials["detector_material"] = osg.material.detector()
 
     # --- Asset Path ---
-    mesh_path = os.path.join("./assets", "integrating_sphere_0.3.obj")
+    mesh_path = os.path.join("E:/workspace/Optix_sphere/assets", "integrating_sphere_25.4_0.01.obj")
         
     # --- Simulation ---
     simulator = osg.Simulator()
 
     start_build = time.time()
-    simulator.build_scene_from_file(mesh_path, mesh_config)
+    simulator.build_scene_from_file(mesh_path, materials, mesh_config)
     end_build = time.time()
     print(f"   ✅ Scene built in {end_build - start_build:.3f} seconds.")
 

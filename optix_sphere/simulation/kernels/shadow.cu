@@ -44,3 +44,14 @@ extern "C" __global__ void __anyhit__absorber_shadow() {
     shadow_payload->occluded = true;
     optixTerminateRay();
 }
+
+// Shadow ray any-hit for mixed materials (diffuse + specular)
+// Marks ray as occluded and terminates
+extern "C" __global__ void __anyhit__mixed_shadow() {
+    unsigned long long payload_ptr = static_cast<unsigned long long>(optixGetPayload_0()) |
+                                     (static_cast<unsigned long long>(optixGetPayload_1()) << 32);
+    ShadowPayload* shadow_payload = reinterpret_cast<ShadowPayload*>(payload_ptr);
+    shadow_payload->occluded = true;
+    optixTerminateRay();
+}
+

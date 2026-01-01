@@ -1,5 +1,6 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
+#include <pybind11/functional.h>  // For std::function binding
 #include <pybind11/numpy.h>
 #include <spdlog/spdlog.h> // For spdlog::set_level
 #include <spdlog/common.h> // For spdlog::level::level_enum and spdlog::to_string_view
@@ -9,6 +10,7 @@
 #include "constants.h"
 #include "photon/sources.h"     // New data-only source structs
 #include "photon/batch.h"       // For HostPhotonBatch
+#include "material.h"           // For material factory functions
 
 namespace py = pybind11;
 using namespace phonder; // For PhotonSource, IsotropicPointSource etc.
@@ -60,8 +62,8 @@ PYBIND11_MODULE(_core, m) {
 
     // Bind new scene configuration structs
     py::class_<MeshSceneConfig>(m, "MeshSceneConfig")
-        .def(py::init<>())
-        .def_readwrite("default_reflectance", &MeshSceneConfig::default_reflectance);
+        .def(py::init<>());
+        // Reserved for future extensions (e.g., global scaling, coordinate transforms)
 
     // Bind simulation configuration
     py::class_<SimConfig>(m, "SimConfig")
@@ -90,10 +92,16 @@ PYBIND11_MODULE(_core, m) {
     // Bind the unified Simulator class
     py::class_<Simulator>(m, "Simulator")
         .def(py::init<>(), "Initializes the OptiX Simulator.")
-        .def("build_scene_from_file", &Simulator::build_scene_from_file,
+        .def("build_scene_from_file",
+             static_cast<void (Simulator::*)(const std::string&, const MeshSceneConfig&)>(&Simulator::build_scene_from_file),
              py::arg("file_path"), py::arg("config"),
              "Builds the scene from an OBJ file using the provided mesh configuration. "
              "The 'file_path' should be an absolute path to the .obj file.")
+        .def("build_scene_from_file",
+             static_cast<void (Simulator::*)(const std::string&, const std::map<std::string, MaterialFactory>&, const MeshSceneConfig&)>(&Simulator::build_scene_from_file),
+             py::arg("file_path"), py::arg("materials"), py::arg("config"),
+             "Builds the scene from an OBJ file with custom material factories. "
+             "The 'materials' parameter is a dict mapping material names to factory functions.")
         .def("run", static_cast<SimulationResult (Simulator::*)(const phonder::PhotonSource&, const SimConfig&)>(&Simulator::run),
              py::arg("photon_source"), py::arg("config"),
              "Runs the Monte Carlo simulation with the given photon source and simulation configuration.")
@@ -177,6 +185,77 @@ PYBIND11_MODULE(_core, m) {
           py::arg("level"),
           "Sets the global logging level. Use LogLevel enum (e.g., osg.LogLevel.INFO).");
 
+    // ============================================
+    // Material System
+    // ============================================
+    // Bind Material base class with shared_ptr as holder
+    // This is required for MaterialFactory functions to work with pybind11
+    py::class_<Material, std::shared_ptr<Material>>(m, "Material")
+        .def("get_kernel_name", &Material::get_kernel_name,
+             "Returns the OptiX kernel name for this material");
+
+    // Also bind concrete material types (as opaque types)
+    py::class_<LambertianMaterial, Material, std::shared_ptr<LambertianMaterial>>(m, "LambertianMaterial");
+    py::class_<MixedMaterial, Material, std::shared_ptr<MixedMaterial>>(m, "MixedMaterial");
+    py::class_<DetectorMaterial, Material, std::shared_ptr<DetectorMaterial>>(m, "DetectorMaterial");
+    py::class_<AbsorberMaterial, Material, std::shared_ptr<AbsorberMaterial>>(m, "AbsorberMaterial");
+
+    // Create a submodule for material factory functions
+    py::module_ material_module = m.def_submodule("material", "Material factory functions for creating custom materials");
+
+    // Bind material factory functions
+    material_module.def("lambertian", &material::lambertian,
+                       py::arg("reflectance"),
+                       "Create a Lambertian (purely diffuse) material factory.\n\n"
+                       "Args:\n"
+                       "    reflectance (float): Surface reflectance (0-1)\n\n"
+                       "Returns:\n"
+                       "    MaterialFactory: A factory function for creating Lambertian materials\n\n"
+                       "Example:\n"
+                       "    >>> materials = {}\n"
+                       "    >>> materials['wall'] = material.lambertian(0.98)\n");
+
+    material_module.def("mixed", &material::mixed,
+                       py::arg("diffuse_ratio"),
+                       py::arg("specular_ratio"),
+                       py::arg("reflectance"),
+                       "Create a mixed (diffuse + specular) material factory.\n\n"
+                       "Args:\n"
+                       "    diffuse_ratio (float): Fraction using Lambertian scattering (0-1)\n"
+                       "    specular_ratio (float): Fraction using specular reflection (0-1)\n"
+                       "    reflectance (float): Total reflectance (0-1)\n\n"
+                       "Note:\n"
+                       "    diffuse_ratio + specular_ratio should equal 1.0\n\n"
+                       "Returns:\n"
+                       "    MaterialFactory: A factory function for creating mixed materials\n\n"
+                       "Example:\n"
+                       "    >>> materials = {}\n"
+                       "    >>> materials['wall'] = material.mixed(0.7, 0.3, 0.98)  # 70% diffuse, 30% specular\n");
+
+    material_module.def("detector", &material::detector,
+                       "Create a detector material factory.\n\n"
+                       "Returns:\n"
+                       "    MaterialFactory: A factory function for creating detector materials\n\n"
+                       "Example:\n"
+                       "    >>> materials = {}\n"
+                       "    >>> materials['detector'] = material.detector()\n");
+
+    material_module.def("absorber", &material::absorber,
+                       "Create an absorber (perfect black body) material factory.\n\n"
+                       "Returns:\n"
+                       "    MaterialFactory: A factory function for creating absorber materials\n\n"
+                       "Example:\n"
+                       "    >>> materials = {}\n"
+                       "    >>> materials['porthole'] = material.absorber()\n");
+
+    material_module.def("get_default_materials", &material::get_default_materials,
+                       "Get default material factory mapping.\n\n"
+                       "Returns:\n"
+                       "    dict: A dictionary mapping common OBJ material names to default factories\n\n"
+                       "Example:\n"
+                       "    >>> materials = material.get_default_materials()\n"
+                       "    >>> # Modify specific materials as needed\n"
+                       "    >>> materials['wall_material'] = material.lambertian(0.99)\n");
 
     // 常量
     m.attr("PI") = PI;

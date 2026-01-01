@@ -87,19 +87,27 @@ namespace {
 }
 
 Scene::Scene(const OptixContext& context) : context_(context) {
-    // Initialize materials vector (4 materials corresponding to MaterialType enum)
-    materials_.resize(static_cast<size_t>(MaterialType::Unknown));
+    // Materials will be dynamically created based on mesh configuration
 }
 
 void Scene::build_scene(const std::string& mesh_path, const Sphere& sphere_params) {
+    // Use default material factories
+    auto material_factories = MeshLoader::get_default_materials();
+    build_scene(mesh_path, material_factories, sphere_params);
+}
+
+void Scene::build_scene(
+    const std::string& mesh_path,
+    const std::map<std::string, MaterialFactory>& material_factories,
+    const Sphere& sphere_params
+) {
     spdlog::info("Building scene from mesh: {}", mesh_path);
 
-    // 1. Load mesh
-    auto material_mapping = MeshLoader::get_default_material_mapping();
-    LoadedMesh mesh = MeshLoader::load_obj(mesh_path, material_mapping);
+    // 1. Load mesh with material factories
+    LoadedMesh mesh = MeshLoader::load_obj(mesh_path, material_factories);
 
-    spdlog::info("Loaded mesh: {} vertices, {} triangles",
-                 mesh.get_vertex_count(), mesh.get_triangle_count());
+    spdlog::info("Loaded mesh: {} vertices, {} triangles, {} materials",
+                 mesh.get_vertex_count(), mesh.get_triangle_count(), mesh.get_material_count());
 
     // 2. Upload vertex and index data to GPU
     vertex_buffer_.upload(mesh.vertices.data(),
@@ -120,10 +128,10 @@ void Scene::build_scene(const std::string& mesh_path, const Sphere& sphere_param
     build_input.triangleArray.numIndexTriplets = static_cast<unsigned int>(mesh.indices.size());
     build_input.triangleArray.indexFormat = OPTIX_INDICES_FORMAT_UNSIGNED_INT3;
 
-    // Build per-triangle SBT indices based on material type
+    // Build per-triangle SBT indices based on material index
     std::vector<unsigned int> sbt_indices(mesh.indices.size());
     for (size_t i = 0; i < mesh.triangle_materials.size(); ++i) {
-        sbt_indices[i] = static_cast<unsigned int>(mesh.triangle_materials[i].type);
+        sbt_indices[i] = static_cast<unsigned int>(mesh.triangle_materials[i]);
     }
 
     DeviceBuffer sbt_index_buffer;
@@ -134,15 +142,10 @@ void Scene::build_scene(const std::string& mesh_path, const Sphere& sphere_param
     build_input.triangleArray.sbtIndexOffsetSizeInBytes = sizeof(unsigned int);
     build_input.triangleArray.sbtIndexOffsetStrideInBytes = sizeof(unsigned int);
 
-    // Flags for each material type (4 materials)
-    static unsigned int input_flags[4] = {
-        OPTIX_GEOMETRY_FLAG_NONE,  // SphereWall
-        OPTIX_GEOMETRY_FLAG_NONE,  // Detector
-        OPTIX_GEOMETRY_FLAG_NONE,  // Baffle
-        OPTIX_GEOMETRY_FLAG_NONE   // PortHole
-    };
-    build_input.triangleArray.flags = input_flags;
-    build_input.triangleArray.numSbtRecords = static_cast<unsigned int>(MaterialType::Unknown);
+    // Flags for each material (all set to NONE for now)
+    std::vector<unsigned int> input_flags(mesh.get_material_count(), OPTIX_GEOMETRY_FLAG_NONE);
+    build_input.triangleArray.flags = input_flags.data();
+    build_input.triangleArray.numSbtRecords = static_cast<unsigned int>(mesh.get_material_count());
 
     // 4. Compute memory usage for the GAS
     OptixAccelBuildOptions accel_options = {};
@@ -177,53 +180,47 @@ void Scene::build_scene(const std::string& mesh_path, const Sphere& sphere_param
         0
     ));
 
-    // 6. Create physics-based material instances
-    // Note: Array index corresponds to MaterialType enum (for SBT indexing)
-    // but materials themselves don't know their "role" in the scene
-
-    // Slot 0 (MaterialType::SphereWall): High-reflectance Lambertian material
-    materials_[static_cast<int>(MaterialType::SphereWall)] =
-        std::make_unique<LambertianMaterial>(sphere_params.reflectance, sphere_params.center);
-
-    // Slot 1 (MaterialType::Detector): Energy recording sensor
-    materials_[static_cast<int>(MaterialType::Detector)] =
-        std::make_unique<DetectorMaterial>();
-
-    // Slot 2 (MaterialType::Baffle): Low-reflectance Lambertian material
-    materials_[static_cast<int>(MaterialType::Baffle)] =
-        std::make_unique<LambertianMaterial>(0.05f, sphere_params.center);
-
-    // Slot 3 (MaterialType::PortHole): Perfect absorber
-    materials_[static_cast<int>(MaterialType::PortHole)] =
-        std::make_unique<AbsorberMaterial>(sphere_params.center);
+    // 6. Create material instances using material factories
+    materials_.resize(mesh.get_material_count());
+    for (size_t i = 0; i < mesh.material_factories.size(); ++i) {
+        const auto& [name, factory] = mesh.material_factories[i];
+        materials_[i] = factory(sphere_params.center);  // Call factory with sphere center
+        spdlog::info("Created material [{}]: {}", i, name);
+    }
 
     // 7. Extract detector triangles for NEE
     std::vector<float3> detector_vertices;
     detector_total_area_ = 0.0f;
 
     for (size_t i = 0; i < mesh.triangle_materials.size(); ++i) {
-        if (mesh.triangle_materials[i].type == MaterialType::Detector) {
-            uint3 idx = mesh.indices[i];
-            float3 v0 = mesh.vertices[idx.x];
-            float3 v1 = mesh.vertices[idx.y];
-            float3 v2 = mesh.vertices[idx.z];
+        int mat_idx = mesh.triangle_materials[i];
+        if (mat_idx < static_cast<int>(mesh.material_factories.size())) {
+            const auto& [name, factory] = mesh.material_factories[mat_idx];
+            // Check if this is a detector material by creating a test instance
+            auto test_mat = factory(sphere_params.center);
+            if (test_mat->get_kernel_name() == "__closesthit__detector") {
+                uint3 idx = mesh.indices[i];
+                float3 v0 = mesh.vertices[idx.x];
+                float3 v1 = mesh.vertices[idx.y];
+                float3 v2 = mesh.vertices[idx.z];
 
-            detector_vertices.push_back(v0);
-            detector_vertices.push_back(v1);
-            detector_vertices.push_back(v2);
+                detector_vertices.push_back(v0);
+                detector_vertices.push_back(v1);
+                detector_vertices.push_back(v2);
 
-            // Calculate triangle area
-            float3 edge1 = make_float3(v1.x - v0.x, v1.y - v0.y, v1.z - v0.z);
-            float3 edge2 = make_float3(v2.x - v0.x, v2.y - v0.y, v2.z - v0.z);
-            float3 cross_product = make_float3(
-                edge1.y * edge2.z - edge1.z * edge2.y,
-                edge1.z * edge2.x - edge1.x * edge2.z,
-                edge1.x * edge2.y - edge1.y * edge2.x
-            );
-            float area = 0.5f * sqrtf(cross_product.x * cross_product.x +
-                                      cross_product.y * cross_product.y +
-                                      cross_product.z * cross_product.z);
-            detector_total_area_ += area;
+                // Calculate triangle area
+                float3 edge1 = make_float3(v1.x - v0.x, v1.y - v0.y, v1.z - v0.z);
+                float3 edge2 = make_float3(v2.x - v0.x, v2.y - v0.y, v2.z - v0.z);
+                float3 cross_product = make_float3(
+                    edge1.y * edge2.z - edge1.z * edge2.y,
+                    edge1.z * edge2.x - edge1.x * edge2.z,
+                    edge1.x * edge2.y - edge1.y * edge2.x
+                );
+                float area = 0.5f * sqrtf(cross_product.x * cross_product.x +
+                                          cross_product.y * cross_product.y +
+                                          cross_product.z * cross_product.z);
+                detector_total_area_ += area;
+            }
         }
     }
 

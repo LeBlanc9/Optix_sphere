@@ -7,15 +7,12 @@
 // ============================================
 
 size_t LambertianMaterial::get_sbt_data_size() const {
-    // Use SphereWallSbtData structure
-    // (Note: SphereWallSbtData and BaffleSbtData have identical layout)
     return sizeof(SphereWallSbtData);
 }
 
 void LambertianMaterial::write_sbt_data(void* dest) const {
     SphereWallSbtData* data = static_cast<SphereWallSbtData*>(dest);
     data->reflectance = reflectance_;
-    data->center = center_;
 }
 
 // ============================================
@@ -42,5 +39,20 @@ size_t AbsorberMaterial::get_sbt_data_size() const {
 
 void AbsorberMaterial::write_sbt_data(void* dest) const {
     PortHoleSbtData* data = static_cast<PortHoleSbtData*>(dest);
-    data->center = center_;
+    data->dummy = 0;  // Empty struct
+}
+
+// ============================================
+// MixedMaterial Implementation
+// ============================================
+
+size_t MixedMaterial::get_sbt_data_size() const {
+    return sizeof(MixedMaterialSbtData);
+}
+
+void MixedMaterial::write_sbt_data(void* dest) const {
+    MixedMaterialSbtData* data = static_cast<MixedMaterialSbtData*>(dest);
+    data->diffuse_ratio = diffuse_ratio_;
+    data->specular_ratio = specular_ratio_;
+    data->reflectance = reflectance_;
 }

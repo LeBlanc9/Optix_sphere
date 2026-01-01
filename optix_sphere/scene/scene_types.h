@@ -77,17 +77,15 @@ inline void configure_detector_chord(
     // 如果需要安全边距，应该在intersection检查中处理，而不是增大探测器
         detector.radius = r_hole;
     }
-    
+
     // =================================================================
     // API v2 Configuration Structs
     // =================================================================
-    
+
     //
     // 用于从 .obj 文件加载的场景的配置
     struct MeshSceneConfig {
-        // 应用于所有未指定材质的默认反射率
-        float default_reflectance = 0.98f;
-        
-            // (未来扩展) 按名称为材质指定反射率
-            // std::map<std::string, float> material_reflectance;
-        };
+        // 预留给未来扩展（例如：全局缩放、坐标系转换等）
+        // 注意：材质反射率现在通过 MaterialFactory 直接指定，不再使用全局默认值
+    };
+

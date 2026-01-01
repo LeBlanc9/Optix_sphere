@@ -85,6 +85,8 @@ SimulationResult PathTracer::launch_from_batch(
     // 3. Setup device parameters
     DeviceParams params;
     params.traversable = scene_.get_traversable();
+    params.vertex_buffer = scene_.get_vertex_buffer_ptr();
+    params.index_buffer = scene_.get_index_buffer_ptr();
     params.flux_buffer = reinterpret_cast<double*>(flux_buffer.get_cu_ptr());
     params.detected_rays_buffer = reinterpret_cast<unsigned long long*>(detected_rays_buffer.get_cu_ptr());
     params.total_bounces_buffer = reinterpret_cast<unsigned long long*>(total_bounces_buffer.get_cu_ptr());

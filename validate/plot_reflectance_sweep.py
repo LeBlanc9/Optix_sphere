@@ -24,8 +24,8 @@ color_error = "#D96161"      # Red for error
 
 # --- Load Data ---
 current_dir = os.path.dirname(os.path.abspath(__file__))
-input_name = 'sweep_reflectance_ideal.csv'
-file_path = os.path.join(current_dir, input_name)
+input_name = 'integrating_sphere_25.4_0.01_4-baffle.csv'
+file_path = os.path.join(current_dir, "baffle", input_name)
 
 try:
     df = pd.read_csv(file_path)

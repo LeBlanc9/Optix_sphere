@@ -197,6 +197,22 @@ void OptixPipelineBuilder::create_program_groups() {
         desc.hitgroup.entryFunctionNameAH = "__anyhit__absorber_shadow";
         create_and_register("__anyhit__absorber_shadow", desc);
     }
+    {
+        // Mixed material (triangle mesh closest-hit)
+        OptixProgramGroupDesc desc = {};
+        desc.kind = OPTIX_PROGRAM_GROUP_KIND_HITGROUP;
+        desc.hitgroup.moduleCH = module_;
+        desc.hitgroup.entryFunctionNameCH = "__closesthit__mixed";
+        create_and_register("__closesthit__mixed", desc);
+    }
+    {
+        // Mixed material (shadow any-hit)
+        OptixProgramGroupDesc desc = {};
+        desc.kind = OPTIX_PROGRAM_GROUP_KIND_HITGROUP;
+        desc.hitgroup.moduleAH = module_;
+        desc.hitgroup.entryFunctionNameAH = "__anyhit__mixed_shadow";
+        create_and_register("__anyhit__mixed_shadow", desc);
+    }
 
     spdlog::info("✅ Program groups created ({} total)", program_groups_.size());
 }
