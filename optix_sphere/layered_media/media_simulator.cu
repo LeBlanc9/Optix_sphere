@@ -24,8 +24,9 @@ static MediaSimulationDeviceResult _run_simulation(const MediaSimConfig& config,
 
     DevicePhotonBatch reflected_batch_out;
     DevicePhotonBatch transmitted_batch_out;
-    reflected_batch_out.resize(num_photons);
-    transmitted_batch_out.resize(num_photons);
+    // Allocate 2x capacity to account for photon splitting and diffuse reflections/transmissions
+    reflected_batch_out.resize(num_photons * 2);
+    transmitted_batch_out.resize(num_photons * 2);
 
     double* d_specular_reflection_weight;
     cudaMalloc((void**)&d_specular_reflection_weight, sizeof(double));
@@ -33,7 +34,9 @@ static MediaSimulationDeviceResult _run_simulation(const MediaSimConfig& config,
 
     MediaKernelParams params;
     params.input_batch_size = num_photons;
-    params.output_buffer_capacity = num_photons;
+    // Set output buffer capacity to 2x num_photons
+    params.output_buffer_capacity = num_photons * 2;
+    
     
     params.input_batch = input_batch.get_view();
     

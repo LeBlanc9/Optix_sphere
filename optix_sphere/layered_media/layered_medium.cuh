@@ -35,7 +35,6 @@ struct LayeredMedium {
 
     LayeredMedium() = default;
 
-    // Builder 模式构造
     __host__ __device__ LayeredMedium(float ambient_n, float width = 100.0f)
         : ambient_n(ambient_n), num_layers(0), width(width), total_thickness(0.0f) {}
 
@@ -101,10 +100,11 @@ struct LayeredMedium {
 
 
 __device__ void lm_step(
-    const LayeredMedium& medium, 
+    const LayeredMedium& medium,
     float3& position,
     float3& direction,
     double& weight,
+    int& layer_idx,      // 新增：当前层索引（输入输出参数）
     int& trans_type,
     curandState* state
 );

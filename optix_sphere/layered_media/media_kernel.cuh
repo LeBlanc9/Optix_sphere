@@ -109,20 +109,33 @@ static __global__ void media_simulation_kernel(const MediaKernelParams* params) 
 
         // 确保光子从表面入射（z=0）
         const float3 surface_pos = (pos.z < 0.0f) ? pos + (-pos.z / dir.z) * dir : pos;
+        if (fabsf(surface_pos.x) > params->medium->width / 2 || fabsf(surface_pos.y) > params->medium->width / 2) {
+            break;
+            printf("Warning: Photon starting x position out of medium width bounds.\n");
+        }
 
+        // Apply photon splitting for initial surface interaction.
         const float n_ambient = params->medium->ambient_n;
         const float n_tissue = params->medium->layers[0].n;
         const float R = optics::fresnel_reflectance(n_ambient, n_tissue, dir.z);
 
-        if (curand_uniform(&state) > R) {
-            optics::refract_z_axis(dir, n_ambient, n_tissue);
-            pos = surface_pos + dir * 1e-6f;
-        } else {
-            dir.z = -dir.z;
-            atomicAdd(params->specular_reflection_weight, weight);
-            record_reflected_photon(params, surface_pos, dir, weight);
+        // 1. Split-off the specularly reflected photon and record it.
+        if (R > 0.0f) {
+            float3 reflected_dir = dir;
+            reflected_dir.z = -reflected_dir.z;
+            double reflected_weight = weight * R;
+            record_reflected_photon(params, surface_pos, reflected_dir, reflected_weight);
+        }
+
+        // 2. The original photon's weight is reduced and it is transmitted.
+        weight *= (1.0f - R);
+        if (weight <= 1e-9f) { // If remaining weight is negligible, terminate.
             continue;
         }
+
+        // 3. Refract the transmitted photon and start its journey inside the medium.
+        optics::refract_z_axis(dir, n_ambient, n_tissue);
+        pos = surface_pos + dir * 1e-6f;
 
         int trans_type = 0;
         while (weight > 0.0f) {
@@ -174,8 +187,8 @@ __device__ void lm_step(
 ) {
     // 获取当前层索引（0 = 第一层组织）
     int layer_idx = medium.get_layer_index(position.z);
+
     if (layer_idx < 0) {
-        // 不在任何层内，终止光子
         weight = 0;
         trans_type = 0;
         return;
@@ -183,7 +196,6 @@ __device__ void lm_step(
 
     const Layer& current_layer = medium.layers[layer_idx];
 
-    // 采样自由程（使用预计算的 inv_mus）
     float step = -logf(curand_uniform(state)) * current_layer.inv_mus;
 
     // 计算到边界的距离

@@ -54,7 +54,7 @@ int main() {
     double transmitted_weight_sum = result.transmitted_weight();
     
     double specular_reflection = result.specular_reflection_weight;
-    double diffuse_reflection = reflected_weight_sum - specular_reflection;
+    double diffuse_reflection = reflected_weight_sum;
 
     std::cout << std::endl;
     std::cout << "=== Results ===" << std::endl;
