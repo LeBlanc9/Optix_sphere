@@ -40,10 +40,10 @@ int main() {
         Simulator simulator;
 
         // Configure and build the scene from a file
-        fs::path mesh_path = fs::path("E:/workspace/Optix_sphere/assets/port_thickness") / "integrating_sphere_25.4_5.obj";
+        fs::path mesh_path = fs::path("E:/workspace/Optix_sphere/assets/port_thickness") / "integrating_sphere_25.4_0.01.obj";
 
         // === NEW: Define custom materials using factory functions ===
-        const float wall_reflectance = 0.99f;
+        const float wall_reflectance = 0.98f;
         using namespace material;
         std::map<std::string, MaterialFactory> materials;
         // materials["wall_material"] = mixed(0.7f, 0.3f, 0.99f);
@@ -55,7 +55,6 @@ int main() {
 
         // --- Theoretical Calculation ---
         // New object-oriented approach for theoretical sphere
-        // float sphere_radius_for_theory = 50.0f;
         float sphere_radius_for_theory = 152.4f / 2.0f;
         float wall_reflectance_for_theory = wall_reflectance;
         float incident_power_for_theory = phonder::get_source_power(light_source);

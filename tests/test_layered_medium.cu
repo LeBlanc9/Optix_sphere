@@ -44,7 +44,7 @@ int main() {
 
     // 4. Create and run the media simulator
     MediaSimulator media_sim(media_config);
-    int num_photons_to_simulate = 1000000;  // 1M photons
+    int num_photons_to_simulate = int(1e7);
 
     std::cout << "Running simulation with " << num_photons_to_simulate << " photons..." << std::endl;
     MediaSimulationResult result = media_sim.run_and_copy_to_cpu(num_photons_to_simulate);
@@ -54,7 +54,7 @@ int main() {
     double transmitted_weight_sum = result.transmitted_weight();
     
     double specular_reflection = result.specular_reflection_weight;
-    double diffuse_reflection = reflected_weight_sum;
+    double diffuse_reflection = reflected_weight_sum - specular_reflection;
 
     std::cout << std::endl;
     std::cout << "=== Results ===" << std::endl;

@@ -114,7 +114,6 @@ static __global__ void media_simulation_kernel(const MediaKernelParams* params) 
             printf("Warning: Photon starting x position out of medium width bounds.\n");
         }
 
-        // Apply photon splitting for initial surface interaction.
         const float n_ambient = params->medium->ambient_n;
         const float n_tissue = params->medium->layers[0].n;
         const float R = optics::fresnel_reflectance(n_ambient, n_tissue, dir.z);
@@ -124,16 +123,10 @@ static __global__ void media_simulation_kernel(const MediaKernelParams* params) 
             float3 reflected_dir = dir;
             reflected_dir.z = -reflected_dir.z;
             double reflected_weight = weight * R;
+            // atomicAdd(params->specular_reflection_weight, reflected_weight); 
             record_reflected_photon(params, surface_pos, reflected_dir, reflected_weight);
         }
-
-        // 2. The original photon's weight is reduced and it is transmitted.
         weight *= (1.0f - R);
-        if (weight <= 1e-9f) { // If remaining weight is negligible, terminate.
-            continue;
-        }
-
-        // 3. Refract the transmitted photon and start its journey inside the medium.
         optics::refract_z_axis(dir, n_ambient, n_tissue);
         pos = surface_pos + dir * 1e-6f;
 
@@ -242,10 +235,10 @@ __device__ void lm_step(
 
         if (curand_uniform(state) < r_fresnel) {
             optics::reflect(direction, normal);
-            position = position + 1e-4f * normal;
+            position = position + 1e-5f * normal;
         } else {
             optics::refract_z_axis(direction, n1, n2);
-            position = position - 1e-4f * normal;
+            position = position - 1e-5f * normal;
 
             if (normal.z == 0.0f) {
                 // 从侧边离开

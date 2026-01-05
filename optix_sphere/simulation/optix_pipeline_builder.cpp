@@ -106,40 +106,20 @@ void OptixPipelineBuilder::create_program_groups() {
         create_and_register("__raygen__data_driven", desc);
     }
     {
+        // Radiance miss program (general miss for all geometry types)
         OptixProgramGroupDesc desc = {};
         desc.kind = OPTIX_PROGRAM_GROUP_KIND_MISS;
         desc.miss.module = module_;
-        desc.miss.entryFunctionName = "__miss__sphere";
-        create_and_register("__miss__sphere", desc);
+        desc.miss.entryFunctionName = "__miss__radiance";
+        create_and_register("__miss__radiance", desc);
     }
     {
+        // Shadow miss program
         OptixProgramGroupDesc desc = {};
         desc.kind = OPTIX_PROGRAM_GROUP_KIND_MISS;
         desc.miss.module = module_;
         desc.miss.entryFunctionName = "__miss__shadow";
         create_and_register("__miss__shadow", desc);
-    }
-
-    // ============================================
-    // Analytical geometry hitgroups (custom primitives)
-    // ============================================
-    {
-        OptixProgramGroupDesc desc = {};
-        desc.kind = OPTIX_PROGRAM_GROUP_KIND_HITGROUP;
-        desc.hitgroup.moduleCH = module_;
-        desc.hitgroup.entryFunctionNameCH = "__closesthit__sphere";
-        desc.hitgroup.moduleIS = module_;
-        desc.hitgroup.entryFunctionNameIS = "__intersection__sphere";
-        create_and_register("__closesthit__sphere", desc);
-    }
-    {
-        OptixProgramGroupDesc desc = {};
-        desc.kind = OPTIX_PROGRAM_GROUP_KIND_HITGROUP;
-        desc.hitgroup.moduleAH = module_;
-        desc.hitgroup.entryFunctionNameAH = "__anyhit__sphere_shadow";
-        desc.hitgroup.moduleIS = module_;
-        desc.hitgroup.entryFunctionNameIS = "__intersection__sphere";
-        create_and_register("__anyhit__sphere_shadow", desc);
     }
 
     // ============================================
@@ -212,6 +192,22 @@ void OptixPipelineBuilder::create_program_groups() {
         desc.hitgroup.moduleAH = module_;
         desc.hitgroup.entryFunctionNameAH = "__anyhit__mixed_shadow";
         create_and_register("__anyhit__mixed_shadow", desc);
+    }
+    {
+        // Spherical Lambertian (optimized for spheres)
+        OptixProgramGroupDesc desc = {};
+        desc.kind = OPTIX_PROGRAM_GROUP_KIND_HITGROUP;
+        desc.hitgroup.moduleCH = module_;
+        desc.hitgroup.entryFunctionNameCH = "__closesthit__spherical_lambertian";
+        create_and_register("__closesthit__spherical_lambertian", desc);
+    }
+    {
+        // Spherical Mixed (optimized for spheres)
+        OptixProgramGroupDesc desc = {};
+        desc.kind = OPTIX_PROGRAM_GROUP_KIND_HITGROUP;
+        desc.hitgroup.moduleCH = module_;
+        desc.hitgroup.entryFunctionNameCH = "__closesthit__spherical_mixed";
+        create_and_register("__closesthit__spherical_mixed", desc);
     }
 
     spdlog::info("✅ Program groups created ({} total)", program_groups_.size());

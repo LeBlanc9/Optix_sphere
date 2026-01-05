@@ -8,7 +8,7 @@ OptixSBTBuilder::OptixSBTBuilder() {
 
 void OptixSBTBuilder::build_sbt(const OptixPipelineBuilder& pipeline_builder, const Scene& scene) {
     create_raygen_record(pipeline_builder.get_program_group("__raygen__data_driven"));
-    create_miss_records(pipeline_builder.get_program_group("__miss__sphere"),
+    create_miss_records(pipeline_builder.get_program_group("__miss__radiance"),
                        pipeline_builder.get_program_group("__miss__shadow"));
 
     // Create hitgroup records using polymorphic material system

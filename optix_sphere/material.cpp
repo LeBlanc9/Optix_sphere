@@ -56,3 +56,33 @@ void MixedMaterial::write_sbt_data(void* dest) const {
     data->specular_ratio = specular_ratio_;
     data->reflectance = reflectance_;
 }
+
+// ============================================
+// SphericalLambertianMaterial Implementation
+// ============================================
+
+size_t SphericalLambertianMaterial::get_sbt_data_size() const {
+    return sizeof(SphericalLambertianSbtData);
+}
+
+void SphericalLambertianMaterial::write_sbt_data(void* dest) const {
+    SphericalLambertianSbtData* data = static_cast<SphericalLambertianSbtData*>(dest);
+    data->reflectance = reflectance_;
+    data->center = center_;
+}
+
+// ============================================
+// SphericalMixedMaterial Implementation
+// ============================================
+
+size_t SphericalMixedMaterial::get_sbt_data_size() const {
+    return sizeof(SphericalMixedSbtData);
+}
+
+void SphericalMixedMaterial::write_sbt_data(void* dest) const {
+    SphericalMixedSbtData* data = static_cast<SphericalMixedSbtData*>(dest);
+    data->diffuse_ratio = diffuse_ratio_;
+    data->specular_ratio = specular_ratio_;
+    data->reflectance = reflectance_;
+    data->center = center_;
+}

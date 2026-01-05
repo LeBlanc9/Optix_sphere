@@ -57,20 +57,39 @@ struct MixedMaterialSbtData {
 };
 
 // ============================================
-// SoA (Structure of Arrays) 光子数据
-// 用于高性能 GPU 数据驱动模拟
+// Spherical Material SBT Structures
 // ============================================
-// 注意：我们统一使用 SoA 格式，不再使用 InputPhoton (AoS)
-// SoA 格式对 GPU 合并访问更友好
+// These materials use spherical normal calculation (from center)
+// instead of triangle geometric normals. Faster but only accurate
+// for perfectly spherical surfaces.
+
+// SBT data for spherical Lambertian material
+struct SphericalLambertianSbtData {
+    float reflectance;  // 反射率 (e.g., 0.98)
+    float3 center;      // 球心（用于计算球面法线）
+};
+
+// SBT data for spherical mixed material
+struct SphericalMixedSbtData {
+    float diffuse_ratio;   // Lambertian 散射比例 (0-1)
+    float specular_ratio;  // 镜面反射比例 (0-1)
+    float reflectance;     // 总反射率 (0-1)
+    float3 center;         // 球心（用于计算球面法线）
+};
+
+// ============================================
+// SoA (Structure of Arrays) 光子数据
+// ============================================
 
 // Data passed along with a ray
 struct RayPayload {
     float3 origin;
     float3 direction;
-    double weight;      // 无量纲权重 (初始=1.0, 代表光子存活概率) - 使用double提高精度
+    double weight;
     int bounce_count;
     bool active;
     unsigned int seed;
+    bool last_bounce_was_specular;  // 上一次反弹是否为镜面反射（用于NEE正确处理）
 };
 
 // Shadow ray payload for NEE (Next Event Estimation)
@@ -96,7 +115,7 @@ struct DeviceParams {
     // Configuration
     unsigned int num_rays;
     unsigned int max_bounces;
-    double power_per_ray;   // 使用double精度
+    double power_per_ray;
     bool use_nee;           // 是否启用Next Event Estimation (NEE) 方差优化
 
     // Data-driven mode (SoA format for GPU efficiency)

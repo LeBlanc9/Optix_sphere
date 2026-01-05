@@ -23,6 +23,7 @@ extern "C" __global__ void __raygen__forward_trace() {
     payload.bounce_count = 0;
     payload.active = 1;
     payload.seed = seed;
+    payload.last_bounce_was_specular = false;  // 初始光源发射不是镜面反射
 
     // 追踪光线 (循环多次反射)
     for (int i = 0; i < params.max_bounces && payload.active; ++i) {
@@ -71,6 +72,7 @@ extern "C" __global__ void __raygen__data_driven() {
     payload.bounce_count = 0;  // Reset bounce count for surface simulation
     payload.active = 1;
     payload.seed = seed;
+    payload.last_bounce_was_specular = false;  // 初始光源发射不是镜面反射
 
     // 5. Trace the ray (same as procedural mode)
     for (int i = 0; i < params.max_bounces && payload.active; ++i) {

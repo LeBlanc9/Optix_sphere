@@ -6,16 +6,6 @@ extern "C" __global__ void __miss__shadow() {
     // occluded 已经初始化为 false，无需操作
 }
 
-// Shadow ray 球面遮挡检测（any-hit 程序）
-extern "C" __global__ void __anyhit__sphere_shadow() {
-    // Shadow ray 击中球面，表示被遮挡
-    unsigned long long payload_ptr = static_cast<unsigned long long>(optixGetPayload_0()) |
-                                     (static_cast<unsigned long long>(optixGetPayload_1()) << 32);
-    ShadowPayload* shadow_payload = reinterpret_cast<ShadowPayload*>(payload_ptr);
-    shadow_payload->occluded = true;
-    optixTerminateRay();  // 提前终止
-}
-
 // Shadow ray 探测器遮挡检测（any-hit 程序）
 extern "C" __global__ void __anyhit__detector_shadow() {
     // Shadow ray 击中探测器本身，这实际上不应该发生

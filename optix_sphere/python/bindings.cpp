@@ -199,6 +199,8 @@ PYBIND11_MODULE(_core, m) {
     py::class_<MixedMaterial, Material, std::shared_ptr<MixedMaterial>>(m, "MixedMaterial");
     py::class_<DetectorMaterial, Material, std::shared_ptr<DetectorMaterial>>(m, "DetectorMaterial");
     py::class_<AbsorberMaterial, Material, std::shared_ptr<AbsorberMaterial>>(m, "AbsorberMaterial");
+    py::class_<SphericalLambertianMaterial, Material, std::shared_ptr<SphericalLambertianMaterial>>(m, "SphericalLambertianMaterial");
+    py::class_<SphericalMixedMaterial, Material, std::shared_ptr<SphericalMixedMaterial>>(m, "SphericalMixedMaterial");
 
     // Create a submodule for material factory functions
     py::module_ material_module = m.def_submodule("material", "Material factory functions for creating custom materials");
@@ -247,6 +249,40 @@ PYBIND11_MODULE(_core, m) {
                        "Example:\n"
                        "    >>> materials = {}\n"
                        "    >>> materials['porthole'] = material.absorber()\n");
+
+    material_module.def("spherical_lambertian", &material::spherical_lambertian,
+                       py::arg("reflectance"),
+                       "Create a spherical Lambertian material factory (OPTIMIZED for spheres).\n\n"
+                       "Uses spherical normal calculation - ~3-5x faster than triangle normals.\n"
+                       "ONLY use for perfectly spherical surfaces without baffles.\n\n"
+                       "Args:\n"
+                       "    reflectance (float): Surface reflectance (0-1)\n\n"
+                       "Returns:\n"
+                       "    MaterialFactory: A factory function for creating spherical Lambertian materials\n\n"
+                       "Example:\n"
+                       "    >>> # For perfect sphere (faster)\n"
+                       "    >>> materials = {}\n"
+                       "    >>> materials['wall'] = material.spherical_lambertian(0.98)\n");
+
+    material_module.def("spherical_mixed", &material::spherical_mixed,
+                       py::arg("diffuse_ratio"),
+                       py::arg("specular_ratio"),
+                       py::arg("reflectance"),
+                       "Create a spherical mixed material factory (OPTIMIZED for spheres).\n\n"
+                       "Uses spherical normal calculation - ~3-5x faster than triangle normals.\n"
+                       "ONLY use for perfectly spherical surfaces without baffles.\n\n"
+                       "Args:\n"
+                       "    diffuse_ratio (float): Fraction using Lambertian scattering (0-1)\n"
+                       "    specular_ratio (float): Fraction using specular reflection (0-1)\n"
+                       "    reflectance (float): Total reflectance (0-1)\n\n"
+                       "Note:\n"
+                       "    diffuse_ratio + specular_ratio should equal 1.0\n\n"
+                       "Returns:\n"
+                       "    MaterialFactory: A factory function for creating spherical mixed materials\n\n"
+                       "Example:\n"
+                       "    >>> # For perfect sphere with realistic surface (faster)\n"
+                       "    >>> materials = {}\n"
+                       "    >>> materials['wall'] = material.spherical_mixed(0.7, 0.3, 0.98)\n");
 
     material_module.def("get_default_materials", &material::get_default_materials,
                        "Get default material factory mapping.\n\n"
