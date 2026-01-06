@@ -26,7 +26,7 @@ def main():
     materials["detector_material"] = osg.material.detector()
 
     # --- Asset Path ---
-    mesh_path = os.path.join("E:/workspace/Optix_sphere/assets", "integrating_sphere_25.4_0.01.obj")
+    mesh_path = os.path.join("E:/workspace/Optix_sphere/assets/port_thickness", "integrating_sphere_25.4_0.01.obj")
         
     # --- Simulation ---
     simulator = osg.Simulator()

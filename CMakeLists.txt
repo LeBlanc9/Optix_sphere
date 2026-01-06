@@ -219,14 +219,6 @@ else()
         media
     )
     add_test(NAME LayeredMediumTest COMMAND test_layered_medium)
-
-    add_executable(test_spd tests/spd.cu)
-    target_link_libraries(test_spd PRIVATE
-        sphere
-        media
-    )
-    target_compile_definitions(test_spd PRIVATE FMT_UNICODE=0)
-
 endif()
 
 message(STATUS "")

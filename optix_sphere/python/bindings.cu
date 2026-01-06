@@ -9,22 +9,20 @@
 #include "photon/sources.h"
 #include "photon/photon_batch.h"
 #include "photon/photon_transform.cuh"
+#include "layered_media/layered_medium.cuh"
+#include "layered_media/media_simulator.cuh"
+#include "layered_media/layered_medium.cuh"
+#include "layered_media/media_simulator.cuh"
 #include <spdlog/spdlog.h>
 
 namespace py = pybind11;
 using namespace phonder;
 using namespace theory;
 
-// Implementation for the missing set_log_level function
-void set_log_level(int level) {
-    spdlog::set_level(static_cast<spdlog::level::level_enum>(level));
-}
-
 PYBIND11_MODULE(_core, m) {
     m.doc() = "OptiX Sphere - Monte Carlo simulation for integrating spheres";
     m.attr("__version__") = "0.1.0";
 
-    // Bind spdlog's level enum to Python
     py::enum_<spdlog::level::level_enum>(m, "LogLevel")
         .value("TRACE", spdlog::level::trace)
         .value("DEBUG", spdlog::level::debug)
@@ -34,6 +32,10 @@ PYBIND11_MODULE(_core, m) {
         .value("CRITICAL", spdlog::level::critical)
         .value("OFF", spdlog::level::off)
         .export_values();
+
+    m.def("set_log_level", [](spdlog::level::level_enum level) {
+        spdlog::set_level(level);
+    }, py::arg("level"));
 
 
     py::class_<float3>(m, "float3")
@@ -120,15 +122,153 @@ PYBIND11_MODULE(_core, m) {
           py::arg("input_batch"), py::arg("offset"),
           "Translate photon positions by a fixed offset.");
 
-    m.def("set_log_level", &set_log_level,
-          py::arg("level"),
-          "Set global logging level (0=trace, 1=debug, 2=info, 3=warn, 4=error, 5=critical, 6=off).");
+    // ============================================
+    // Material System
+    // ============================================
+    // Bind Material base class with shared_ptr as holder
+    // This is required for MaterialFactory functions to work with pybind11
+    py::class_<Material, std::shared_ptr<Material>>(m, "Material")
+        .def("get_kernel_name", &Material::get_kernel_name,
+             "Returns the OptiX kernel name for this material");
 
-    py::module_ material_module = m.def_submodule("material", "Material factory functions");
-    material_module.def("lambertian", &material::lambertian, py::arg("reflectance"));
-    material_module.def("mixed", &material::mixed, py::arg("diffuse_ratio"), py::arg("specular_ratio"), py::arg("reflectance"));
-    material_module.def("detector", &material::detector);
-    material_module.def("absorber", &material::absorber);
-    material_module.def("spherical_lambertian", &material::spherical_lambertian, py::arg("reflectance"));
-    material_module.def("spherical_mixed", &material::spherical_mixed, py::arg("diffuse_ratio"), py::arg("specular_ratio"), py::arg("reflectance"));
+    // Also bind concrete material types (as opaque types)
+    py::class_<LambertianMaterial, Material, std::shared_ptr<LambertianMaterial>>(m, "LambertianMaterial");
+    py::class_<MixedMaterial, Material, std::shared_ptr<MixedMaterial>>(m, "MixedMaterial");
+    py::class_<DetectorMaterial, Material, std::shared_ptr<DetectorMaterial>>(m, "DetectorMaterial");
+    py::class_<AbsorberMaterial, Material, std::shared_ptr<AbsorberMaterial>>(m, "AbsorberMaterial");
+
+    // Create a submodule for material factory functions
+    py::module_ material_module = m.def_submodule("material", "Material factory functions for creating custom materials");
+
+    // Bind material factory functions
+    material_module.def("lambertian", &material::lambertian,
+                       py::arg("reflectance"),
+                       "Create a Lambertian (purely diffuse) material factory.\n\n"
+                       "Args:\n"
+                       "    reflectance (float): Surface reflectance (0-1)\n\n"
+                       "Returns:\n"
+                       "    MaterialFactory: A factory function for creating Lambertian materials\n\n"
+                       "Example:\n"
+                       "    >>> materials = {}\n"
+                       "    >>> materials['wall'] = material.lambertian(0.98)\n");
+
+    material_module.def("mixed", &material::mixed,
+                       py::arg("diffuse_ratio"),
+                       py::arg("specular_ratio"),
+                       py::arg("reflectance"),
+                       "Create a mixed (diffuse + specular) material factory.\n\n"
+                       "Args:\n"
+                       "    diffuse_ratio (float): Fraction using Lambertian scattering (0-1)\n"
+                       "    specular_ratio (float): Fraction using specular reflection (0-1)\n"
+                       "    reflectance (float): Total reflectance (0-1)\n\n"
+                       "Note:\n"
+                       "    diffuse_ratio + specular_ratio should equal 1.0\n\n"
+                       "Returns:\n"
+                       "    MaterialFactory: A factory function for creating mixed materials\n\n"
+                       "Example:\n"
+                       "    >>> materials = {}\n"
+                       "    >>> materials['wall'] = material.mixed(0.7, 0.3, 0.98)  # 70% diffuse, 30% specular\n");
+
+    material_module.def("detector", &material::detector,
+                       "Create a detector material factory.\n\n"
+                       "Returns:\n"
+                       "    MaterialFactory: A factory function for creating detector materials\n\n"
+                       "Example:\n"
+                       "    >>> materials = {}\n"
+                       "    >>> materials['detector'] = material.detector()\n");
+
+    material_module.def("absorber", &material::absorber,
+                       "Create an absorber (perfect black body) material factory.\n\n"
+                       "Returns:\n"
+                       "    MaterialFactory: A factory function for creating absorber materials\n\n"
+                       "Example:\n"
+                       "    >>> materials = {}\n"
+                       "    >>> materials['porthole'] = material.absorber()\n");
+
+    material_module.def("spherical_lambertian", &material::spherical_lambertian,
+                       py::arg("reflectance"),
+                       "Create a spherical Lambertian material factory (optimized for spheres).\n\n"
+                       "Uses spherical normal calculation - ~3-5x faster than triangle normals.\n"
+                       "ONLY use for perfectly spherical surfaces without baffles.\n\n"
+                       "Args:\n"
+                       "    reflectance (float): Surface reflectance (0-1)\n");
+
+    material_module.def("spherical_mixed", &material::spherical_mixed,
+                       py::arg("diffuse_ratio"),
+                       py::arg("specular_ratio"),
+                       py::arg("reflectance"),
+                       "Create a spherical mixed material factory (optimized for spheres).\n\n"
+                       "Uses spherical normal calculation - ~3-5x faster than triangle normals.\n"
+                       "ONLY use for perfectly spherical surfaces without baffles.\n\n"
+                       "Args:\n"
+                       "    diffuse_ratio (float): Fraction using Lambertian scattering (0-1)\n"
+                       "    specular_ratio (float): Fraction using specular reflection (0-1)\n"
+                       "    reflectance (float): Total reflectance (0-1)\n");
+
+    material_module.def("get_default_materials", &material::get_default_materials,
+                       "Get default material factory mapping.\n\n"
+                       "Returns:\n"
+                       "    dict: A dictionary mapping common OBJ material names to default factories\n\n"
+                       "Example:\n"
+                       "    >>> materials = material.get_default_materials()\n"
+                       "    >>> # Modify specific materials as needed\n"
+                       "    >>> materials['wall_material'] = material.lambertian(0.99)\n");
+
+    // ============================================
+    // Layered Media Simulation
+    // ============================================
+    py::module_ media_module = m.def_submodule("media", "Layered media simulation functions");
+
+    py::class_<Layer>(media_module, "Layer")
+        .def(py::init<float, float, float, float, float>(),
+             py::arg("n"), py::arg("mua"), py::arg("mus"), py::arg("g"), py::arg("d"))
+        .def_readwrite("n", &Layer::n)
+        .def_readwrite("mua", &Layer::mua)
+        .def_readwrite("mus", &Layer::mus)
+        .def_readwrite("g", &Layer::g)
+        .def_readwrite("d", &Layer::d);
+
+    py::class_<LayeredMedium>(media_module, "LayeredMedium")
+        .def(py::init<float, float>(), py::arg("ambient_n"), py::arg("width") = 100.0f)
+        .def("add_layer", &LayeredMedium::add_layer,
+             py::arg("n"), py::arg("mua"), py::arg("mus"), py::arg("g"), py::arg("d"),
+             py::return_value_policy::reference_internal)
+        .def("set_width", &LayeredMedium::set_width,
+             py::arg("w"), py::return_value_policy::reference_internal)
+        .def("set_ambient_n", &LayeredMedium::set_ambient_n,
+             py::arg("n"), py::return_value_policy::reference_internal)
+        .def_readonly("ambient_n", &LayeredMedium::ambient_n)
+        .def_readonly("num_layers", &LayeredMedium::num_layers)
+        .def_readonly("width", &LayeredMedium::width)
+        .def_readonly("total_thickness", &LayeredMedium::total_thickness);
+
+    py::class_<MediaSimConfig>(media_module, "MediaSimConfig")
+        .def(py::init<>())
+        .def_readwrite("medium", &MediaSimConfig::medium)
+        .def_readwrite("source", &MediaSimConfig::source)
+        .def_readwrite("gpu_id", &MediaSimConfig::gpu_id)
+        .def_readwrite("reflected_radius", &MediaSimConfig::reflected_radius)
+        .def_readwrite("transmitted_radius", &MediaSimConfig::transmitted_radius);
+
+    py::class_<HostMediaSimulationResult>(media_module, "HostMediaSimulationResult")
+        .def(py::init<>())
+        .def_readonly("reflected_batch", &HostMediaSimulationResult::reflected_batch)
+        .def_readonly("transmitted_batch", &HostMediaSimulationResult::transmitted_batch)
+        .def_readonly("specular_reflection_weight", &HostMediaSimulationResult::specular_reflection_weight);
+
+    py::class_<MediaSimulationResult>(media_module, "MediaSimulationResult")
+        .def(py::init<>())
+        .def_readonly("reflected_batch", &MediaSimulationResult::reflected_batch)
+        .def_readonly("transmitted_batch", &MediaSimulationResult::transmitted_batch)
+        .def_readonly("specular_reflection_weight", &MediaSimulationResult::specular_reflection_weight)
+        .def("to_host", &MediaSimulationResult::to_host);
+
+    py::class_<MediaSimulator>(media_module, "MediaSimulator")
+        .def(py::init<const MediaSimConfig&>(), py::arg("config"))
+        .def("run", static_cast<MediaSimulationResult (MediaSimulator::*)(int)>(&MediaSimulator::run),
+             py::arg("num_photons"))
+        .def("run", static_cast<MediaSimulationResult (MediaSimulator::*)(const PhotonBatch&)>(&MediaSimulator::run),
+             py::arg("input_batch"))
+        .def("get_medium", &MediaSimulator::get_medium, py::return_value_policy::reference)
+        .def("update_medium", &MediaSimulator::update_medium, py::arg("new_medium"));
 }
