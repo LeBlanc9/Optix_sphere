@@ -2,6 +2,7 @@
 #include "utils/device/core.cuh"
 #include <optix_function_table_definition.h>
 #include <spdlog/spdlog.h>
+#include <spdlog/fmt/fmt.h>
 
 OptixContext::OptixContext() {
     try {
@@ -53,7 +54,7 @@ void OptixContext::init_optix() {
 
 void OptixContext::context_log_cb(unsigned int level, const char* tag, const char* message, void*) {
     // OptiX log levels: 1=Fatal, 2=Error, 3=Warning, 4=Info
-    std::string formatted_msg = std::format("[{}]: {}", tag, message);
+    std::string formatted_msg = fmt::format("[{}]: {}", tag, message);
 
     switch (level) {
         case 1: // Fatal

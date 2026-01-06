@@ -9,6 +9,9 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_CUDA_STANDARD 20)
 set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 
+# Auto-detect GPU architecture (native = compile for local GPU)
+set(CMAKE_CUDA_ARCHITECTURES native)
+
 # OptiX 路径
 if(WIN32)
     set(OptiX_INSTALL_DIR "C:/ProgramData/NVIDIA Corporation/OptiX SDK 9.0.0")
@@ -31,12 +34,16 @@ include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/optix_sphere
 )
 
+# Extract first detected GPU architecture for PTX compilation
+list(GET CMAKE_CUDA_ARCHITECTURES 0 PTX_ARCH)
+message(STATUS "Detected CUDA architecture for PTX: sm_${PTX_ARCH}")
+
 # 编译 CUDA 为 PTX
 add_custom_command(
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/forward_tracer.ptx
     COMMAND ${CMAKE_CUDA_COMPILER}
         -ptx
-        -arch=sm_75
+        -arch=sm_${PTX_ARCH}
         -I${OptiX_INCLUDE}
         -I${CUDAToolkit_INCLUDE_DIRS}
         -I${CMAKE_CURRENT_SOURCE_DIR}/optix_sphere
@@ -92,7 +99,6 @@ set_target_properties(photon PROPERTIES
     POSITION_INDEPENDENT_CODE ON
     CUDA_SEPARABLE_COMPILATION ON
     CUDA_RESOLVE_DEVICE_SYMBOLS ON
-    CUDA_ARCHITECTURES 75
 )
 target_include_directories(photon PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/optix_sphere
@@ -115,7 +121,6 @@ set_target_properties(media PROPERTIES
     POSITION_INDEPENDENT_CODE ON
     CUDA_SEPARABLE_COMPILATION ON
     CUDA_RESOLVE_DEVICE_SYMBOLS ON
-    CUDA_ARCHITECTURES 75
 )
 target_include_directories(media PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/optix_sphere
@@ -146,7 +151,6 @@ set_target_properties(sphere PROPERTIES
     POSITION_INDEPENDENT_CODE ON
     CUDA_SEPARABLE_COMPILATION ON
     CUDA_RESOLVE_DEVICE_SYMBOLS ON
-    CUDA_ARCHITECTURES 75
 )
 add_dependencies(sphere ptx_target embedded_ptx_target)
 target_include_directories(sphere PUBLIC
