@@ -1,7 +1,7 @@
 #pragma once
 #include <cuda_runtime.h>
 #include <device_launch_parameters.h>
-#include <cmath>
+#include "core/math_constants.h"
 
 // This is the primary CUDA-side math header.
 // It includes all host/device functions, operators, and constants.
@@ -9,13 +9,8 @@
 
 namespace phonder {
 
-// ============================================================================
-// Mathematical Constants
-// ============================================================================
-constexpr float PI = 3.1415926535897932f;
-constexpr float M_PI = 3.1415926535897932f;
-constexpr float TWO_PI = 2.0f * PI;
-constexpr float EPSILON = 1e-6f;
+// Mathematical constants are defined in core/math_constants.h
+// Use: phonder::pi, phonder::two_pi, phonder::epsilon, etc.
 
 // ============================================================================
 // Vector Operations
@@ -122,12 +117,12 @@ float distance_sq(const float3& a, const float3& b) {
 
 __device__ __host__ __forceinline__
 float deg2rad(float deg) {
-    return deg * PI / 180.0f;
+    return deg * pi / 180.0f;
 }
 
 __device__ __host__ __forceinline__
 float rad2deg(float rad) {
-    return rad * 180.0f / PI;
+    return rad * 180.0f / pi;
 }
 
 

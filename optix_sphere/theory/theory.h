@@ -3,7 +3,7 @@
 #include <cmath>
 #include <vector>
 #include "simulation/simulation_result.h"
-#include "constants.h"
+#include "core/math_constants.h"
 
 namespace theory {
 
@@ -46,10 +46,10 @@ public:
     const std::vector<Port>& get_ports() const { return ports_; }
 
     /**
-     * @brief 计算理想球体的总表面积 (4 * PI * r^2)。
+     * @brief 计算理想球体的总表面积 (4 * pi * r^2)。
      */
     double get_total_sphere_area() const {
-        return 4.0 * PI * radius_ * radius_;
+        return 4.0 * phonder::pi * radius_ * radius_;
     }
     
     /**
@@ -64,7 +64,7 @@ public:
         double weighted_reflectance_sum = 0.0;
 
         for (const auto& port : ports_) {
-            double port_area = PI * port.radius * port.radius;
+            double port_area = phonder::pi * port.radius * port.radius;
             wall_area -= port_area;
             weighted_reflectance_sum += port_area * port.reflectance;
         }

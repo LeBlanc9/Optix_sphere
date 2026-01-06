@@ -2,7 +2,7 @@
 
 #include <optix.h>
 #include "simulation/device_params.h"
-#include "constants.h"
+#include "core/math_constants.h"
 
 // ============================================
 // Russian Roulette Configuration
@@ -50,7 +50,7 @@ __device__ float3 sample_lambertian(const float3& normal, unsigned int* seed) {
     float u1 = random_float(seed);
     float u2 = random_float(seed);
     float r = sqrtf(u1);
-    float theta = 2.0f * M_PIf * u2;
+    float theta = 2.0f * phonder::pi * u2;
     float x = r * cosf(theta);
     float y = r * sinf(theta);
     float z = sqrtf(1.0f - u1);
@@ -113,7 +113,7 @@ __device__ __forceinline__ void accumulate_nee_contribution(
 
         if (cos_theta_detector > 0.0f) {
             // Compute geometric factor (solid angle projection)
-            float detector_area = M_PIf * params.detector.radius * params.detector.radius;
+            float detector_area = phonder::pi * params.detector.radius * params.detector.radius;
             float geometric_factor = (detector_area * cos_theta_detector) / (distance * distance);
 
             // BRDF * cos(θ) term

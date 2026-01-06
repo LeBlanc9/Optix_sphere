@@ -11,7 +11,7 @@ extern "C" __global__ void __raygen__forward_trace() {
     // 从光源均匀采样方向 (各向同性点光源)
     float u1 = random_float(&seed);
     float u2 = random_float(&seed);
-    float theta = 2.0f * M_PIf * u1;
+    float theta = 2.0f * phonder::pi * u1;
     float phi = acosf(2.0f * u2 - 1.0f);
     float3 direction = make_float3(sinf(phi) * cosf(theta), sinf(phi) * sinf(theta), cosf(phi));
 

@@ -156,8 +156,8 @@ __device__ inline void refract_z_axis(float3& direction, float n1, float n2) {
  */
 __device__ inline float henyey_greenstein(float g, curandState* rng_state) {
     float rand = curand_uniform(rng_state);
-    
-    if (fabsf(g) < EPSILON) {
+
+    if (fabsf(g) < epsilon) {
         // 各向同性散射
         return 2.0f * rand - 1.0f;
     }
@@ -176,7 +176,7 @@ __device__ inline float henyey_greenstein(float g, curandState* rng_state) {
  */
 __device__ inline void scatter_direction(float3& direction, float g, curandState* rng_state) {
     // Random azimuthal angle
-    float phi = TWO_PI * curand_uniform(rng_state);
+    float phi = two_pi * curand_uniform(rng_state);
     float sin_phi, cos_phi;
     __sincosf(phi, &sin_phi, &cos_phi);
     
@@ -230,11 +230,11 @@ __device__ inline float3 scattered_direction(const float3& direction, float g, c
 __device__ inline float3 random_lambertian_direction(const float3& normal, curandState* rng_state) {
     float u1 = curand_uniform(rng_state);
     float u2 = curand_uniform(rng_state);
-    
+
     // Cosine-weighted hemisphere sampling
     float cos_theta = sqrtf(u1);
     float sin_theta = sqrtf(1.0f - u1);
-    float phi = TWO_PI * u2;
+    float phi = two_pi * u2;
     
     float sin_phi, cos_phi;
     __sincosf(phi, &sin_phi, &cos_phi);

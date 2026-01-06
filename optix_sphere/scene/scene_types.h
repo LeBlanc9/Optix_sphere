@@ -1,7 +1,6 @@
 #pragma once
 
 #include <vector_types.h>
-#include "constants.h"
 
 // Using C-style structs for simple data aggregation and easy
 // transfer to the device-side structs if needed.

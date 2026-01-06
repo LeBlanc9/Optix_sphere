@@ -74,7 +74,7 @@ extern "C" __global__ void __closesthit__lambertian() {
 
     // NEE: explicit detector sampling
     if (params.use_nee) {
-        double brdf_reflectance = material->reflectance * INV_PI;
+        double brdf_reflectance = material->reflectance * phonder::inv_pi;
         accumulate_nee_contribution(hit_point, shading_normal, brdf_reflectance, payload->weight, 4);
     }
 
@@ -124,7 +124,7 @@ extern "C" __global__ void __closesthit__mixed() {
 
     // NEE: only diffuse component (specular is delta function)
     if (params.use_nee) {
-        double brdf_reflectance = material->diffuse_ratio * material->reflectance * INV_PI;
+        double brdf_reflectance = material->diffuse_ratio * material->reflectance * phonder::inv_pi;
         accumulate_nee_contribution(hit_point, shading_normal, brdf_reflectance, payload->weight, 4);
     }
 
@@ -184,7 +184,7 @@ extern "C" __global__ void __closesthit__spherical_lambertian() {
 
     // NEE: explicit detector sampling
     if (params.use_nee) {
-        double brdf_reflectance = material->reflectance * INV_PI;
+        double brdf_reflectance = material->reflectance * phonder::inv_pi;
         accumulate_nee_contribution(hit_point, shading_normal, brdf_reflectance, payload->weight, 1);
     }
 
@@ -227,7 +227,7 @@ extern "C" __global__ void __closesthit__spherical_mixed() {
 
     // NEE: only diffuse component (specular is delta function)
     if (params.use_nee) {
-        double brdf_reflectance = material->diffuse_ratio * material->reflectance * INV_PI;
+        double brdf_reflectance = material->diffuse_ratio * material->reflectance * phonder::inv_pi;
         accumulate_nee_contribution(hit_point, shading_normal, brdf_reflectance, payload->weight, 1);
     }
 

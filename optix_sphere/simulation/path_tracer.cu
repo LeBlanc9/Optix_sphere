@@ -1,6 +1,5 @@
 #include "path_tracer.h"
 #include "simulation/device_params.h"
-#include "constants.h"
 #include "photon/launchers.h"
 #include <spdlog/spdlog.h>
 #include <thrust/device_vector.h>

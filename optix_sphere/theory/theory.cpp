@@ -1,5 +1,4 @@
 #include "theory.h"
-#include "constants.h"
 #include <iostream>
 #include <iomanip>
 #include <cmath>

@@ -39,7 +39,7 @@ __global__ void generate_isotropic_point_source(
     // θ ∈ [0, 2π], φ ∈ [0, π]
     float u1 = random_float(&seed);
     float u2 = random_float(&seed);
-    float theta = 2.0f * M_PIf * u1;           // Azimuthal angle
+    float theta = 2.0f * phonder::pi * u1;           // Azimuthal angle
     float phi = acosf(2.0f * u2 - 1.0f);       // Polar angle (uniform on sphere)
 
     float3 direction = make_float3(
@@ -92,7 +92,7 @@ __global__ void generate_laser_beam_source(
         float u1 = random_float(&seed);
         float u2 = random_float(&seed);
         float r = sqrtf(u1) * tanf(divergence_angle);  // Radius in tangent space
-        float theta = 2.0f * M_PIf * u2;               // Azimuthal angle
+        float theta = 2.0f * phonder::pi * u2;               // Azimuthal angle
 
         // Build orthonormal basis (Frisvad method - efficient for GPU)
         float3 up, right;
@@ -212,7 +212,7 @@ __global__ void generate_ring_beam_source(
     float r_squared = inner_radius * inner_radius +
                       u1 * (outer_radius * outer_radius - inner_radius * inner_radius);
     float r = sqrtf(r_squared);
-    float theta = 2.0f * M_PIf * u2;
+    float theta = 2.0f * phonder::pi * u2;
 
     float3 position = center + r * (cosf(theta) * right + sinf(theta) * up);
 
@@ -220,7 +220,7 @@ __global__ void generate_ring_beam_source(
     float u3 = random_float(&seed);
     float u4 = random_float(&seed);
     float div_r = sqrtf(u3) * tanf(divergence_angle);
-    float div_theta = 2.0f * M_PIf * u4;
+    float div_theta = 2.0f * phonder::pi * u4;
 
     float3 direction = normalize(
         axis + div_r * (cosf(div_theta) * right + sinf(div_theta) * up)

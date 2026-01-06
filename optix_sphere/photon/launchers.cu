@@ -2,7 +2,6 @@
 #include "photon/kernels.cuh"
 #include <vector_types.h>
 #include "utils/device/math.cuh"
-#include "constants.h"
 #include <curand_kernel.h>
 
 // This file implements the C-style launcher function and contains the
@@ -26,7 +25,7 @@ __global__ void generate_isotropic_point_kernel(
 
     float u1 = curand_uniform(&state);
     float u2 = curand_uniform(&state);
-    float theta = TWO_PI * u1;
+    float theta = two_pi * u1;
     float phi = acosf(2.0f * u2 - 1.0f);
 
     float3 dir = make_float3(sinf(phi) * cosf(theta), sinf(phi) * sinf(theta), cosf(phi));
@@ -75,7 +74,7 @@ __global__ void generate_spot_source_kernel(
 
     // Sample a random point on the disk
     float r = radius * sqrtf(curand_uniform(&state));
-    float theta = TWO_PI * curand_uniform(&state);
+    float theta = two_pi * curand_uniform(&state);
 
     float3 pos_offset = r * (cosf(theta) * u + sinf(theta) * v);
 
@@ -143,13 +142,13 @@ __global__ void generate_focused_spot_source_kernel(
 
     // 2. Sample a random point on the source disk
     float r_source = source_radius * sqrtf(curand_uniform(&state));
-    float theta_source = TWO_PI * curand_uniform(&state);
+    float theta_source = two_pi * curand_uniform(&state);
     float3 source_offset = r_source * (cosf(theta_source) * u + sinf(theta_source) * v);
     float3 photon_pos = source_center + source_offset;
 
     // 3. Sample a random point on the target spot disk
     float r_target = spot_radius * sqrtf(curand_uniform(&state));
-    float theta_target = TWO_PI * curand_uniform(&state);
+    float theta_target = two_pi * curand_uniform(&state);
     float3 target_offset = r_target * (cosf(theta_target) * u + sinf(theta_target) * v);
     float3 target_pos = spot_center + target_offset;
 

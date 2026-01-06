@@ -7,7 +7,7 @@
 #include "simulator.h"
 #include "photon/sources.h"
 #include "theory/theory.h"
-#include "constants.h"
+#include "core/math_constants.h"
 #include "material.h"
 
 namespace fs = std::filesystem;
@@ -67,7 +67,7 @@ int main() {
 
         // Add the detector port to the theoretical model
         float detector_area_for_theory = simulator.get_detector_total_area();
-        float detector_radius_for_theory = std::sqrt(detector_area_for_theory / PI);
+        float detector_radius_for_theory = std::sqrt(detector_area_for_theory / phonder::pi);
         spdlog::info("  Detector area for theory: {} mm² (radius: {} mm)",
                      detector_area_for_theory, detector_radius_for_theory);
         theoretical_sphere_model.add_port(detector_radius_for_theory, 0.0f); // Assume 0 reflectance for detector port in theory
