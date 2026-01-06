@@ -2,7 +2,6 @@
 #include <cuda_runtime.h>
 #include <curand_kernel.h>
 #include "layered_medium.cuh"
-#include "photon/batch.cuh"
 #include "utils/device/optics.cuh"
 #include "utils/device/math.cuh"
 
@@ -24,7 +23,11 @@ __device__ void lm_step(
  */
 struct MediaKernelParams {
     const LayeredMedium* medium;
-    PhotonBatchView      input_batch;
+    // --- Input Data (const pointers) ---
+    const float3*        input_positions;
+    const float3*        input_directions;
+    const double*        input_weights;
+    int                  input_batch_size;
     // --- Direct writable pointers for output ---
     float3*              reflected_positions;
     float3*              reflected_directions;
@@ -36,7 +39,6 @@ struct MediaKernelParams {
     // -----------------------------------------
     int*                 reflected_counter;
     int*                 transmitted_counter;
-    int                  input_batch_size;
     int                  output_buffer_capacity;
     unsigned long long   seed;
     // --- Filter parameters ---
@@ -99,9 +101,9 @@ static __global__ void media_simulation_kernel(const MediaKernelParams* params) 
     curand_init(params->seed + idx * 97, idx, 0, &state);
 
     for (int i = idx; i < params->input_batch_size; i += stride) {
-        float3 pos = params->input_batch.positions[i];
-        float3 dir = params->input_batch.directions[i];
-        double weight = params->input_batch.weights[i];
+        float3 pos = params->input_positions[i];
+        float3 dir = params->input_directions[i];
+        double weight = params->input_weights[i];
 
         if (dir.z <= 0.0f) {
             continue;

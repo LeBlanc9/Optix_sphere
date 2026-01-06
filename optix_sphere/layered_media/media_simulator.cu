@@ -8,45 +8,41 @@
 
 namespace phonder {
 
-MediaSimulationResult MediaSimulationDeviceResult::to_host() const {
-    MediaSimulationResult cpu_result;
-    cpu_result.reflected_batch = this->reflected_batch.to_host();
-    cpu_result.transmitted_batch = this->transmitted_batch.to_host();
-    cpu_result.specular_reflection_weight = this->specular_reflection_weight;
-    return cpu_result;
-}
 
-static MediaSimulationDeviceResult _run_simulation(const MediaSimConfig& config, const DevicePhotonBatch& input_batch) {
-    int num_photons = input_batch.size();
+
+static MediaSimulationResult _run_simulation(const MediaSimConfig& config, const PhotonBatch& input_batch) {
+    size_t num_photons = input_batch.size();
     if (num_photons == 0) {
-        return MediaSimulationDeviceResult{};
+        return MediaSimulationResult{};
     }
 
-    DevicePhotonBatch reflected_batch_out;
-    DevicePhotonBatch transmitted_batch_out;
-    // Allocate 2x capacity to account for photon splitting and diffuse reflections/transmissions
-    reflected_batch_out.resize(num_photons * 2);
-    transmitted_batch_out.resize(num_photons * 2);
+    MediaSimulationResult result;
+    // Allocate 2x capacity directly on the device
+    result.reflected_batch.resize(num_photons * 2);
+    result.transmitted_batch.resize(num_photons * 2);
 
     double* d_specular_reflection_weight;
     cudaMalloc((void**)&d_specular_reflection_weight, sizeof(double));
     cudaMemset(d_specular_reflection_weight, 0, sizeof(double));
 
     MediaKernelParams params;
-    params.input_batch_size = num_photons;
-    // Set output buffer capacity to 2x num_photons
     params.output_buffer_capacity = num_photons * 2;
     
-    
-    params.input_batch = input_batch.get_view();
-    
+    // Get const pointers for the input batch
+    params.input_positions = input_batch.c_positions_ptr();
+    params.input_directions = input_batch.c_directions_ptr();
+    params.input_weights = input_batch.c_weights_ptr();
+    params.input_batch_size = num_photons;
+
     // Pass writable raw pointers for output buffers
-    params.reflected_positions = thrust::raw_pointer_cast(reflected_batch_out.positions.data());
-    params.reflected_directions = thrust::raw_pointer_cast(reflected_batch_out.directions.data());
-    params.reflected_weights = thrust::raw_pointer_cast(reflected_batch_out.weights.data());
-    params.transmitted_positions = thrust::raw_pointer_cast(transmitted_batch_out.positions.data());
-    params.transmitted_directions = thrust::raw_pointer_cast(transmitted_batch_out.directions.data());
-    params.transmitted_weights = thrust::raw_pointer_cast(transmitted_batch_out.weights.data());
+    params.reflected_positions = result.reflected_batch.positions_ptr();
+    params.reflected_directions = result.reflected_batch.directions_ptr();
+    params.reflected_weights = result.reflected_batch.weights_ptr();
+
+    params.transmitted_positions = result.transmitted_batch.positions_ptr();
+    params.transmitted_directions = result.transmitted_batch.directions_ptr();
+    params.transmitted_weights = result.transmitted_batch.weights_ptr();
+    
     params.specular_reflection_weight = d_specular_reflection_weight;
 
     params.seed = static_cast<unsigned long long>(time(nullptr)) + config.gpu_id * 1000000;
@@ -67,7 +63,7 @@ static MediaSimulationDeviceResult _run_simulation(const MediaSimConfig& config,
 
     int block_size = 256;
     int max_grid_size = 1024;
-    int grid_size = std::min((num_photons + block_size - 1) / block_size, max_grid_size);
+    int grid_size = std::min((static_cast<int>(num_photons) + block_size - 1) / block_size, max_grid_size);
     media_simulation_kernel<<<grid_size, block_size>>>(d_params);
 
     cudaDeviceSynchronize();
@@ -85,21 +81,19 @@ static MediaSimulationDeviceResult _run_simulation(const MediaSimConfig& config,
     cudaFree(d_params);
     cudaFree(d_specular_reflection_weight);
 
-    reflected_batch_out.resize(reflected_count);
-    transmitted_batch_out.resize(transmitted_count);
-    
-    MediaSimulationDeviceResult result;
-    result.reflected_batch = std::move(reflected_batch_out);
-    result.transmitted_batch = std::move(transmitted_batch_out);
+    // Resize the device vectors to the actual number of photons.
+    result.reflected_batch.resize(reflected_count);
+    result.transmitted_batch.resize(transmitted_count);
+
     result.specular_reflection_weight = h_specular_reflection_weight;
     return result;
 }
 
 
-__host__ MediaSimulationDeviceResult MediaSimulator::run(int num_photons) {
+__host__ MediaSimulationResult MediaSimulator::run(int num_photons) {
     cudaSetDevice(config_.gpu_id);
 
-    DevicePhotonBatch input_batch;
+    PhotonBatch input_batch;
     // Create a seed for this run. Note: time(nullptr) has 1-second resolution.
     // For rapid subsequent calls, a better random seed source might be needed.
     unsigned long long seed = static_cast<unsigned long long>(time(nullptr)) + config_.gpu_id;
@@ -109,14 +103,9 @@ __host__ MediaSimulationDeviceResult MediaSimulator::run(int num_photons) {
     return _run_simulation(config_, input_batch);
 }
 
-__host__ MediaSimulationDeviceResult MediaSimulator::run(const DevicePhotonBatch& input_batch) {
+__host__ MediaSimulationResult MediaSimulator::run(const PhotonBatch& input_batch) {
     cudaSetDevice(config_.gpu_id);
     return _run_simulation(config_, input_batch);
-}
-
-__host__ MediaSimulationResult MediaSimulator::run_and_copy_to_cpu(int num_photons) {
-    cudaSetDevice(config_.gpu_id);
-    return run(num_photons).to_host();
 }
 
 } // namespace phonder

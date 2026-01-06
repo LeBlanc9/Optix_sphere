@@ -47,28 +47,31 @@ int main() {
     int num_photons_to_simulate = int(1e7);
 
     std::cout << "Running simulation with " << num_photons_to_simulate << " photons..." << std::endl;
-    MediaSimulationResult result = media_sim.run_and_copy_to_cpu(num_photons_to_simulate);
+    MediaSimulationResult device_result = media_sim.run(num_photons_to_simulate);
 
-    // 5. Analyze results
-    double reflected_weight_sum = result.reflected_weight();
-    double transmitted_weight_sum = result.transmitted_weight();
+    // 5. Analyze results - first, copy them to the host
+    std::cout << "Copying results to host for analysis..." << std::endl;
+    HostMediaSimulationResult host_result = device_result.to_host();
+
+    double reflected_weight_sum = host_result.reflected_batch.total_weight();
+    double transmitted_weight_sum = host_result.transmitted_batch.total_weight();
     
-    double specular_reflection = result.specular_reflection_weight;
-    double diffuse_reflection = reflected_weight_sum - specular_reflection;
+    double specular_reflection = host_result.specular_reflection_weight;
+    double diffuse_reflection = reflected_weight_sum; // The to_host() copy doesn't distinguish specular from diffuse in the batch itself
 
     std::cout << std::endl;
     std::cout << "=== Results ===" << std::endl;
-    std::cout << "  Reflected photons: " << result.reflected_batch.size() << std::endl;
-    std::cout << "  Transmitted photons: " << result.transmitted_batch.size() << std::endl;
+    std::cout << "  Reflected photons: " << host_result.reflected_batch.size() << std::endl;
+    std::cout << "  Transmitted photons: " << host_result.transmitted_batch.size() << std::endl;
     std::cout << std::endl;
 
     std::cout << "Normalized weights (per incident photon):" << std::endl;
-    std::cout << "  Total Reflected:    " << reflected_weight_sum / num_photons_to_simulate << std::endl;
+    std::cout << "  Total Reflected:    " << (reflected_weight_sum + specular_reflection) / num_photons_to_simulate << std::endl;
     std::cout << "    - Specular:       " << specular_reflection / num_photons_to_simulate << std::endl;
-    std::cout << "    - Diffuse:        " << diffuse_reflection / num_photons_to_simulate << std::endl;
+    std::cout << "    - Diffuse:        " << reflected_weight_sum / num_photons_to_simulate << std::endl;
     std::cout << "  Total Transmitted:  " << transmitted_weight_sum / num_photons_to_simulate << std::endl;
-    std::cout << "  Total (R+T):        " << (reflected_weight_sum + transmitted_weight_sum) / num_photons_to_simulate << std::endl;
-    std::cout << "  Absorbed:           " << 1.0 - (reflected_weight_sum + transmitted_weight_sum) / num_photons_to_simulate << std::endl;
+    std::cout << "  Total (R+T):        " << (reflected_weight_sum + transmitted_weight_sum + specular_reflection) / num_photons_to_simulate << std::endl;
+    std::cout << "  Absorbed:           " << 1.0 - (reflected_weight_sum + transmitted_weight_sum + specular_reflection) / num_photons_to_simulate << std::endl;
     std::cout << std::endl;
 
     std::cout << "✅ Test completed successfully!" << std::endl;

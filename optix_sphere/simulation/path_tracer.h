@@ -9,7 +9,7 @@
 #include "optix_sbt_builder.h"
 #include "photon/sources.h"    // Data-only source definitions
 #include "photon/launchers.h"  // C++ API for generate_photons_on_device
-#include "photon/batch.h"      // For DevicePhotonBatch
+#include "photon/photon_batch.h"      // For PhotonBatch
 #include <memory>
 
 /**
@@ -40,7 +40,7 @@ public:
      */
     SimulationResult launch_from_batch(
         const SimConfig& config,
-        const phonder::DevicePhotonBatch& input_batch);
+        const phonder::PhotonBatch& input_batch);
 
 private:
     void initialize(bool from_file, const std::string& ptx_path_or_code);

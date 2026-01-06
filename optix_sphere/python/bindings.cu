@@ -2,44 +2,24 @@
 #include <pybind11/stl.h>
 #include <pybind11/functional.h>  // For std::function binding
 #include <pybind11/numpy.h>
-#include <spdlog/spdlog.h> // For spdlog::set_level
-#include <spdlog/common.h> // For spdlog::level::level_enum and spdlog::to_string_view
 
 #include "simulator.h" // New unified Simulator API
 #include "theory/theory.h" // New theory API
 #include "constants.h"
 #include "photon/sources.h"     // New data-only source structs
 #include "photon/batch.h"       // For HostPhotonBatch
+#include "photon/batch.cuh"     // For DevicePhotonBatch
 #include "material.h"           // For material factory functions
+#include "photon/photon_transform.cuh"  // For translate_photons
 
 namespace py = pybind11;
 using namespace phonder; // For PhotonSource, IsotropicPointSource etc.
 using namespace theory;  // For TheoryCalculator, TheoreticalIntegratingSphere, Port
 
-// C++ function to set spdlog level
-// Now directly accepts spdlog::level::level_enum
-void set_log_level(spdlog::level::level_enum level) {
-    spdlog::set_level(level);
-    spdlog::info("Global log level set to {}.", spdlog::level::to_string_view(level));
-}
-
 
 PYBIND11_MODULE(_core, m) {
     m.doc() = "OptiX Sphere - Monte Carlo simulation for integrating spheres";
     m.attr("__version__") = "0.1.0";
-
-    // Bind spdlog::level::level_enum for Python control
-    py::enum_<spdlog::level::level_enum>(m, "LogLevel", "Global logging levels for spdlog.")
-        .value("TRACE", spdlog::level::trace)
-        .value("DEBUG", spdlog::level::debug)
-        .value("INFO", spdlog::level::info)
-        .value("WARN", spdlog::level::warn)
-        .value("ERROR", spdlog::level::err)
-        .value("CRITICAL", spdlog::level::critical)
-        .value("OFF", spdlog::level::off)
-        .export_values(); // Exports values directly into the module (e.g., osg.INFO)
-
-
     // Bind common vector types
     py::class_<float3>(m, "float3")
         .def(py::init<float, float, float>())
@@ -105,6 +85,9 @@ PYBIND11_MODULE(_core, m) {
         .def("run", static_cast<SimulationResult (Simulator::*)(const phonder::PhotonSource&, const SimConfig&)>(&Simulator::run),
              py::arg("photon_source"), py::arg("config"),
              "Runs the Monte Carlo simulation with the given photon source and simulation configuration.")
+        .def("run", static_cast<SimulationResult (Simulator::*)(const phonder::DevicePhotonBatch&, const SimConfig&)>(&Simulator::run),
+             py::arg("source_batch"), py::arg("config"),
+             "Runs the Monte Carlo simulation with a pre-generated GPU photon batch (e.g., from MediaSimulator).")
         .def("get_detector_total_area", &Simulator::get_detector_total_area,
              "Returns the total area of the detector in the currently built scene (mm^2).");
 
@@ -175,15 +158,45 @@ PYBIND11_MODULE(_core, m) {
         .def_property_readonly("directions", [](const HostPhotonBatch &b) { return py::array_t<float>(b.directions.size() * 3, reinterpret_cast<const float*>(b.directions.data())); })
         .def_property_readonly("weights", [](const HostPhotonBatch &b) { return py::array_t<double>(b.weights.size(), b.weights.data()); });
 
+    // DevicePhotonBatch (GPU-resident photon batch)
+    py::class_<DevicePhotonBatch>(m, "DevicePhotonBatch")
+        .def(py::init<>())
+        .def("size", &DevicePhotonBatch::size)
+        .def("empty", &DevicePhotonBatch::empty)
+        .def("clear", &DevicePhotonBatch::clear)
+        .def("to_host", &DevicePhotonBatch::to_host,
+             "Transfer photon batch from GPU to CPU memory");
+
 
     m.def("configure_detector_chord", &configure_detector_chord,
           py::arg("detector"), py::arg("sphere"), py::arg("port_hole_radius_mm"),
           "Configure detector position for chord surface geometry");
-          
-    // Bind the set_log_level function
+
+    m.def("translate_photons", &translate_photons,
+          py::arg("input_batch"), py::arg("offset"),
+          "Translate photon positions by a fixed offset.\n\n"
+          "This function shifts all photon positions in a batch by a constant 3D offset.\n"
+          "Useful for moving photons from MediaSimulator output to integrating sphere ports.\n\n"
+          "Args:\n"
+          "    input_batch (DevicePhotonBatch): Input photon batch on GPU\n"
+          "    offset (float3): 3D translation vector (mm)\n\n"
+          "Returns:\n"
+          "    DevicePhotonBatch: New batch with translated positions (directions unchanged)\n\n"
+          "Example:\n"
+          "    >>> # Move reflected photons to sphere port at x=25mm\n"
+          "    >>> aligned_batch = osg.translate_photons(\n"
+          "    ...     media_result.reflected_batch,\n"
+          "    ...     osg.float3(25.0, 0.0, 0.0)\n"
+          "    ... )\n");
+
     m.def("set_log_level", &set_log_level,
           py::arg("level"),
-          "Sets the global logging level. Use LogLevel enum (e.g., osg.LogLevel.INFO).");
+          "Set global logging level.\n\n"
+          "Args:\n"
+          "    level (int): Log level (0=trace, 1=debug, 2=info, 3=warn, 4=error, 5=critical, 6=off)\n\n"
+          "Example:\n"
+          "    >>> import optix_sphere as osg\n"
+          "    >>> osg.set_log_level(2)  # Set to INFO level\n");
 
     // ============================================
     // Material System

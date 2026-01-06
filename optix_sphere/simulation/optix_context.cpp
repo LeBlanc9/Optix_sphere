@@ -9,7 +9,6 @@ OptixContext::OptixContext() {
         init_optix();
     } catch (const std::exception& e) {
         spdlog::error("Error during OptiX context initialization: {}", e.what());
-        // In a real application, you might want to re-throw or handle this more gracefully
         exit(1);
     }
 }
@@ -37,9 +36,6 @@ void OptixContext::init_cuda() {
     cudaDeviceProp props;
     CUDA_CHECK(cudaGetDeviceProperties(&props, 0));
     spdlog::info("✅ CUDA Device: {}", props.name);
-    
-    // The CUcontext is implicitly managed by the CUDA runtime API
-    // We can get it if needed, but for now we'll pass 0 to OptiX
 }
 
 void OptixContext::init_optix() {
@@ -57,7 +53,7 @@ void OptixContext::init_optix() {
 
 void OptixContext::context_log_cb(unsigned int level, const char* tag, const char* message, void*) {
     // OptiX log levels: 1=Fatal, 2=Error, 3=Warning, 4=Info
-    std::string formatted_msg = fmt::format("[{}]: {}", tag, message);
+    std::string formatted_msg = std::format("[{}]: {}", tag, message);
 
     switch (level) {
         case 1: // Fatal

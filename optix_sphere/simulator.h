@@ -5,7 +5,7 @@
 #include <map>
 #include "scene/scene_types.h" // Contains config structs
 #include "photon/sources.h"    // Data-only source definitions
-#include "photon/batch.h"      // For DevicePhotonBatch
+#include "photon/photon_batch.h"      // For PhotonBatch
 #include "photon/launchers.h"  // For generate_photons_on_device in implementation
 #include "simulation/simulation_result.h"
 #include "material.h"          // For MaterialDescriptor
@@ -82,7 +82,7 @@ public:
      * @param config 通用的仿真运行配置 (光线数、反弹次数等)。
      * @return 仿真结果。
      */
-    SimulationResult run(const phonder::DevicePhotonBatch& source_batch, const SimConfig& config);
+    SimulationResult run(const phonder::PhotonBatch& source_batch, const SimConfig& config);
 
 
     /**

@@ -1,7 +1,6 @@
 #include "path_tracer.h"
 #include "simulation/device_params.h"
 #include "constants.h"
-#include "photon/batch.cuh" // For DevicePhotonBatch definition
 #include "photon/launchers.h" // Still needed for generate_photons_on_device in Simulator
 #include <spdlog/spdlog.h>
 #include <thrust/device_vector.h>
@@ -56,7 +55,7 @@ void PathTracer::initialize(bool from_file, const std::string& ptx_path_or_code)
 
 SimulationResult PathTracer::launch_from_batch(
     const SimConfig& config,
-    const phonder::DevicePhotonBatch& input_batch) // Now accepts pre-existing batch
+    const phonder::PhotonBatch& input_batch) // Accepts the new unified PhotonBatch
 {
     spdlog::info("\n🚀 Launching data-driven simulation from pre-existing batch...");
 
@@ -65,7 +64,7 @@ SimulationResult PathTracer::launch_from_batch(
         spdlog::warn("Input photon batch is empty. Aborting launch.");
         return {};
     }
-    spdlog::info("   Input batch contains {} photons on GPU", photon_count);
+    spdlog::info("   Input batch contains {} photons", photon_count);
 
     // 1. Build SBT (if not already built, or if scene changed)
     sbt_builder_->build_sbt(*pipeline_builder_, scene_);
@@ -96,10 +95,10 @@ SimulationResult PathTracer::launch_from_batch(
     params.power_per_ray = 1.0; // The power of each ray is carried in its weight
     params.use_nee = config.use_nee;
 
-    // Data-driven mode: SoA photon arrays directly from DevicePhotonBatch (zero-copy)
-    params.photon_positions = thrust::raw_pointer_cast(input_batch.positions.data());
-    params.photon_directions = thrust::raw_pointer_cast(input_batch.directions.data());
-    params.photon_weights = thrust::raw_pointer_cast(input_batch.weights.data());
+    // Data-driven mode: Get const device pointers directly (zero-copy)
+    params.photon_positions = input_batch.c_positions_ptr();
+    params.photon_directions = input_batch.c_directions_ptr();
+    params.photon_weights = input_batch.c_weights_ptr();
     params.photon_seed_base = config.random_seed; // Still use config seed for internal randomness
     params.num_input_photons = photon_count;
 

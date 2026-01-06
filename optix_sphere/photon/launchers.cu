@@ -1,6 +1,6 @@
 #include "photon/launchers.h"
 #include "photon/kernels.cuh"
-#include "photon/batch.cuh"
+#include <vector_types.h>
 #include "utils/device/math.cuh"
 #include "constants.h"
 #include <curand_kernel.h>
@@ -175,29 +175,40 @@ void launch_kernel(int num_photons, KernelFunc kernel, Args... args) {
 
 void generate_photons_on_device(
     const PhotonSource& source,
-    DevicePhotonBatch& batch_out,
+    PhotonBatch& batch_out,
     int num_photons,
     unsigned long long seed)
 {
-    batch_out.resize(num_photons);
-    PhotonBatchView view = batch_out.get_view();
+    if (num_photons <= 0) {
+        batch_out.clear();
+        return;
+    }
 
+    // 1. Directly resize the device-side memory.
+    batch_out.resize(num_photons);
+
+    // 2. Get raw device pointers directly from the batch.
+    float3* pos_ptr = batch_out.positions_ptr();
+    float3* dir_ptr = batch_out.directions_ptr();
+    double* wgt_ptr = batch_out.weights_ptr();
+
+    // 3. Launch kernels to fill the device memory.
     std::visit([&](auto&& arg) {
         using T = std::decay_t<decltype(arg)>;
         if constexpr (std::is_same_v<T, IsotropicPointSource>) {
-            launch_kernel(num_photons, generate_isotropic_point_kernel, view.positions, view.directions, view.weights, num_photons, arg.position, arg.weight, seed);
+            launch_kernel(num_photons, generate_isotropic_point_kernel, pos_ptr, dir_ptr, wgt_ptr, num_photons, arg.position, arg.weight, seed);
         } else if constexpr (std::is_same_v<T, CollimatedBeamSource>) {
-            launch_kernel(num_photons, generate_collimated_beam_kernel, view.positions, view.directions, view.weights, num_photons, arg.position, arg.direction, arg.weight);
+            launch_kernel(num_photons, generate_collimated_beam_kernel, pos_ptr, dir_ptr, wgt_ptr, num_photons, arg.position, arg.direction, arg.weight);
         } else if constexpr (std::is_same_v<T, SpotSource>) {
-            launch_kernel(num_photons, generate_spot_source_kernel, view.positions, view.directions, view.weights, num_photons, arg.center_position, arg.direction, arg.radius, arg.weight, seed);
+            launch_kernel(num_photons, generate_spot_source_kernel, pos_ptr, dir_ptr, wgt_ptr, num_photons, arg.center_position, arg.direction, arg.radius, arg.weight, seed);
         } else if constexpr (std::is_same_v<T, GaussianBeamSource>) {
-            launch_kernel(num_photons, generate_gaussian_source_kernel, view.positions, view.directions, view.weights, num_photons, arg.center_position, arg.direction, arg.beam_waist, arg.weight, seed);
+            launch_kernel(num_photons, generate_gaussian_source_kernel, pos_ptr, dir_ptr, wgt_ptr, num_photons, arg.center_position, arg.direction, arg.beam_waist, arg.weight, seed);
         } else if constexpr (std::is_same_v<T, FocusedSpotSource>) {
-            launch_kernel(num_photons, generate_focused_spot_source_kernel, view.positions, view.directions, view.weights, num_photons, arg.spot_center, arg.spot_radius, arg.convergence_half_angle_rad, arg.main_axis, arg.source_distance, arg.weight, seed);
+            launch_kernel(num_photons, generate_focused_spot_source_kernel, pos_ptr, dir_ptr, wgt_ptr, num_photons, arg.spot_center, arg.spot_radius, arg.convergence_half_angle_rad, arg.main_axis, arg.source_distance, arg.weight, seed);
         }
     }, source);
 
-    // Synchronize after the kernel launch to ensure data is ready.
+    // Synchronize after the kernel launch to ensure data is ready for subsequent steps.
     cudaDeviceSynchronize();
 }
 

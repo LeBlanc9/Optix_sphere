@@ -1,8 +1,7 @@
 #pragma once
 #include "layered_medium.cuh"
 #include "photon/sources.h"
-#include "photon/batch.h"
-#include "photon/batch.cuh"
+#include "photon/photon_batch.h"
 #include <memory>
 #include <numeric>
 
@@ -18,34 +17,35 @@ struct MediaSimConfig {
 };
 
 /**
- * @brief CPU-based result structure for media simulation (for debugging)
- * Contains batches of reflected and transmitted photons on the host.
+ * @brief Represents the host-side copy of the simulation results.
  */
-struct MediaSimulationResult {
+struct HostMediaSimulationResult {
     HostPhotonBatch reflected_batch;
     HostPhotonBatch transmitted_batch;
     double specular_reflection_weight = 0.0;
-
-    double reflected_weight() const {
-        return reflected_batch.size() > 0 ? 
-            std::accumulate(reflected_batch.weights.begin(), reflected_batch.weights.end(), 0.0) : 0.0;
-    }
-    double transmitted_weight() const {
-        return transmitted_batch.size() > 0 ?
-            std::accumulate(transmitted_batch.weights.begin(), transmitted_batch.weights.end(), 0.0) : 0.0;
-    }
 };
 
+
 /**
- * @brief GPU-based result structure for media simulation (for performance)
- * Contains batches of reflected and transmitted photons on the GPU.
+ * @brief Holds the results of a media simulation, primarily on the device.
+ * Data can be explicitly copied to the host when needed for analysis.
  */
-struct MediaSimulationDeviceResult {
-    DevicePhotonBatch reflected_batch;
-    DevicePhotonBatch transmitted_batch;
+struct MediaSimulationResult {
+    PhotonBatch reflected_batch;
+    PhotonBatch transmitted_batch;
     double specular_reflection_weight = 0.0;
-    
-    MediaSimulationResult to_host() const;
+
+    /**
+     * @brief Copies the simulation results from the device to the host for analysis.
+     * @return A new struct containing the results in host-side std::vectors.
+     */
+    HostMediaSimulationResult to_host() const {
+        return {
+            reflected_batch.to_host(),
+            transmitted_batch.to_host(),
+            specular_reflection_weight
+        };
+    }
 };
 
 /**
@@ -59,12 +59,10 @@ class MediaSimulator {
 public:
     __host__ MediaSimulator(const MediaSimConfig& config) : config_(config) {}
 
-    __host__ MediaSimulationDeviceResult run(int num_photons);
+    __host__ MediaSimulationResult run(int num_photons);
     
-    __host__ MediaSimulationDeviceResult run(const DevicePhotonBatch& input_batch);
+    __host__ MediaSimulationResult run(const PhotonBatch& input_batch);
     
-    __host__ MediaSimulationResult run_and_copy_to_cpu(int num_photons);
-
     __host__ const LayeredMedium& get_medium() const { return config_.medium; }
 
     /**

@@ -10,10 +10,6 @@ set(INSTALL_GTEST OFF CACHE BOOL "")
 add_subdirectory(vendor/googletest)
 message(STATUS "  -> Loaded googletest")
 
-# spdlog
-add_subdirectory(vendor/spdlog)
-message(STATUS "  -> Loaded spdlog")
-
 # tinyobjloader
 # The CMakeLists for tinyobjloader allows disabling tests, which we don't need.
 set(TINYOBJLOADER_BUILD_TEST OFF CACHE BOOL "")
@@ -26,5 +22,9 @@ message(STATUS "  -> Loaded tinyobjloader")
 set(JSON_BuildTests OFF CACHE BOOL "")
 add_subdirectory(vendor/json)
 message(STATUS "  -> Loaded nlohmann_json")
+
+# spdlog
+add_subdirectory(vendor/spdlog)
+message(STATUS "  -> Loaded spdlog")
 
 message(STATUS "✅ All external dependencies loaded from submodules.")

@@ -5,11 +5,21 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+# Set CUDA C++ standard to 20
+set(CMAKE_CUDA_STANDARD 20)
+set(CMAKE_CUDA_STANDARD_REQUIRED ON)
+
 # Option to control building Python bindings (also set automatically when using scikit-build)
 option(BUILD_PYTHON_BINDINGS "Build Python bindings via pybind11" OFF)
 
 if(MSVC)
     add_compile_definitions(_SILENCE_STDEXT_ARR_ITERS_DEPRECATION_WARNING NOMINMAX)
+    # Add /utf-8 for C++ files
+    add_compile_options($<$<COMPILE_LANGUAGE:CXX>:/utf-8>)
+    # Add /utf-8 for CUDA files via -Xcompiler
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Xcompiler=/utf-8")
+    # Enable relaxed constexpr for CUDA to support std::format
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --expt-relaxed-constexpr")
 endif()
 
 # OptiX 路径
@@ -83,8 +93,9 @@ add_custom_target(embedded_ptx_target ALL
 #    - GPU-side photon source generators
 # --------------------------------------------
 add_library(photon STATIC
-    optix_sphere/photon/batch.cu
+    optix_sphere/photon/photon_batch.cu
     optix_sphere/photon/launchers.cu
+    optix_sphere/photon/photon_transform.cu
 )
 set_target_properties(photon PROPERTIES
     POSITION_INDEPENDENT_CODE ON
