@@ -1,7 +1,7 @@
 import numpy as np
 import optix_sphere._core as osg
 import time
-import os
+from pathlib import Path
 
 
 def setup_layered_medium():
@@ -76,19 +76,17 @@ def run_layered_media_simulation(medium, source, num_photons=int(1e6)):
 
 
 def setup_integrating_sphere_geometry():
-   # Choose sphere geometry
-    # 25.4 mm diameter sphere with 0.01 mm port thickness
-    mesh_path = os.path.join(
-        # "E:/workspace/Optix_sphere/assets/port_thickness",
-        os.path.dirname(os.path.abspath(__file__)),
-        "../assets/port_thickness",  
-        "integrating_sphere_25.4_0.01.obj"
+    # Choose sphere geometry - 25.4 mm diameter sphere with 0.01 mm port thickness
+    mesh_path = (
+        Path(__file__).parent.parent /
+        "assets/validations/port_thickness/integrating_sphere_25.4_0.01.obj"
     )
 
     # Define materials
     materials = {
         "wall_material": osg.material.lambertian(0.99),  # High reflectance coating
-        "detector_material": osg.material.detector()
+        "detector_material": osg.material.detector(),
+        "sample_port_material": osg.material.lambertian(0.0)  # Black port
     }
 
     # Sphere geometric information
@@ -98,7 +96,7 @@ def setup_integrating_sphere_geometry():
         "port_thickness": 0.01  # mm
     }
 
-    return mesh_path, materials, sphere_info
+    return str(mesh_path), materials, sphere_info
 
 
 def transform_photons_to_sphere_port(transmitted_batch, sphere_info):
@@ -122,12 +120,6 @@ def transform_photons_to_sphere_port(transmitted_batch, sphere_info):
         transformed_batch: PhotonBatch positioned at sphere port
     """
     # For this example, assume:
-    # - Sphere center at (0, 0, 0)
-    # - Port is on bottom of sphere (z = -radius)
-    # - Layered medium output at z = total_thickness
-    # - Need to shift photons to enter sphere through bottom port
-
-    # Port location (bottom of sphere, entering upward into +z)
     port_z = -sphere_info["radius"] + sphere_info["port_thickness"] + 0.01
 
     # Create offset to move photons to port location
@@ -144,21 +136,6 @@ def transform_photons_to_sphere_port(transmitted_batch, sphere_info):
 
 
 def run_integrating_sphere_simulation(photon_batch, mesh_path, materials):
-    """
-    Run Monte Carlo simulation in integrating sphere using photon batch as source.
-
-    Args:
-        photon_batch: PhotonBatch to use as light source
-        mesh_path: Path to sphere OBJ file
-        materials: Material dictionary
-
-    Returns:
-        result: SimulationResult with detected flux and other metrics
-    """
-    print("\n" + "="*70)
-    print("STEP 2: Integrating Sphere Monte Carlo Simulation")
-    print("="*70)
-
     # Configure simulation
     sim_config = osg.SimConfig()
     sim_config.num_rays = photon_batch.size()  # Use all transmitted photons
@@ -172,7 +149,7 @@ def run_integrating_sphere_simulation(photon_batch, mesh_path, materials):
     simulator = osg.Simulator()
 
     print(f"\n🔨 Building integrating sphere scene...")
-    print(f"  Mesh file: {os.path.basename(mesh_path)}")
+    print(f"  Mesh file: {Path(mesh_path).name}")
     start = time.time()
     simulator.build_scene_from_file(mesh_path, materials, mesh_config)
     elapsed = time.time() - start
@@ -204,24 +181,8 @@ def run_integrating_sphere_simulation(photon_batch, mesh_path, materials):
 
 
 def main():
-    """
-    Main function demonstrating end-to-end simulation workflow.
-    """
-    print("="*70)
-    print("  End-to-End Simulation: Layered Media → Integrating Sphere")
-    print("="*70)
-    print("\nThis simulation mimics a realistic optical measurement:")
-    print("  1. Laser beam → Tissue sample (layered media MC)")
-    print("  2. Transmitted light → Integrating sphere (ray tracing MC)")
-    print("  3. Detector measures total flux")
-
-    # Set logging level
-    # osg.set_log_level(osg.LogLevel.WARN)
     osg.set_log_level(osg.LogLevel.WARN)
 
-    # ============================================================
-    # STEP 1: Layered Media Simulation
-    # ============================================================
 
     medium = setup_layered_medium()
     source = setup_collimated_source()
@@ -229,15 +190,12 @@ def main():
     num_photons = int(1e7)  # Increase for better statistics
     media_result = run_layered_media_simulation(medium, source, num_photons)
 
+
     mesh_path, materials, sphere_info = setup_integrating_sphere_geometry()
     transmitted_batch_transformed = transform_photons_to_sphere_port(
         media_result.transmitted_batch,
         sphere_info
     )
-
-    # ============================================================
-    # STEP 3: Integrating Sphere Simulation
-    # ============================================================
 
     sphere_result = run_integrating_sphere_simulation(
         transmitted_batch_transformed,
@@ -245,16 +203,7 @@ def main():
         materials
     )
 
-    # ============================================================
-    # STEP 4: Combined Analysis
-    # ============================================================
 
-    print("\n" + "="*70)
-    print("FINAL RESULTS: End-to-End Measurement")
-    print("="*70)
-
-    # Calculate transmittance based on sphere measurement
-    # The detected flux represents the transmitted light
     host_media = media_result.to_host()
     T_from_media = np.sum(host_media.transmitted_batch.weights) / num_photons
 

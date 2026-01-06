@@ -52,6 +52,7 @@ public:
     size_t size() const;
     bool empty() const;
     void clear();
+    double total_weight() const;
     
     // --- Explicit Data Movement ---
     HostPhotonBatch to_host() const;

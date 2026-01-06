@@ -1,6 +1,7 @@
 #include "photon_batch.h"
 #include <thrust/device_vector.h>
 #include <thrust/copy.h>
+#include <thrust/reduce.h>
 #include "utils/vector_types.h"
 
 namespace phonder {
@@ -68,6 +69,11 @@ void PhotonBatch::clear() {
     device_data_->d_directions.clear();
     device_data_->d_weights.clear();
     device_data_->count = 0;
+}
+
+double PhotonBatch::total_weight() const {
+    if (device_data_->count == 0) return 0.0;
+    return thrust::reduce(device_data_->d_weights.begin(), device_data_->d_weights.end(), 0.0);
 }
 
 } // namespace phonder

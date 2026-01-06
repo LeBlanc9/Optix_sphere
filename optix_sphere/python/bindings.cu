@@ -82,17 +82,6 @@ PYBIND11_MODULE(_core, m) {
              py::arg("source_batch"), py::arg("config"))
         .def("get_detector_total_area", &Simulator::get_detector_total_area);
 
-    py::class_<IsotropicPointSource>(m, "IsotropicPointSource")
-        .def(py::init<>())
-        .def_readwrite("position", &IsotropicPointSource::position)
-        .def_readwrite("weight", &IsotropicPointSource::weight);
-
-    py::class_<CollimatedBeamSource>(m, "CollimatedBeamSource")
-        .def(py::init<>())
-        .def_readwrite("position", &CollimatedBeamSource::position)
-        .def_readwrite("direction", &CollimatedBeamSource::direction)
-        .def_readwrite("weight", &CollimatedBeamSource::weight);
-
     // Bind HostPhotonBatch to expose data to Python as numpy arrays
     py::class_<HostPhotonBatch>(m, "HostPhotonBatch")
         .def(py::init<>())
@@ -115,12 +104,63 @@ PYBIND11_MODULE(_core, m) {
         .def("size", &PhotonBatch::size)
         .def("empty", &PhotonBatch::empty)
         .def("clear", &PhotonBatch::clear)
+        .def("total_weight", &PhotonBatch::total_weight)
         .def("to_host", &PhotonBatch::to_host,
              "Transfer photon batch from GPU to CPU memory, returning a HostPhotonBatch.");
+
 
     m.def("translate_photons", &translate_photons,
           py::arg("input_batch"), py::arg("offset"),
           "Translate photon positions by a fixed offset.");
+
+
+    py::class_<IsotropicPointSource>(m, "IsotropicPointSource")
+        .def(py::init<>())
+        .def_readwrite("position", &IsotropicPointSource::position)
+        .def_readwrite("weight", &IsotropicPointSource::weight);
+
+    py::class_<CollimatedBeamSource>(m, "CollimatedBeamSource")
+        .def(py::init<>())
+        .def_readwrite("position", &CollimatedBeamSource::position)
+        .def_readwrite("direction", &CollimatedBeamSource::direction)
+        .def_readwrite("weight", &CollimatedBeamSource::weight);
+
+    // ============================================
+    // Photon Generation Convenience Functions
+    // ============================================
+
+    // Unified photon generation function (works with any source type)
+    m.def("generate_photons",
+          [](const PhotonSource& source, int num_photons, unsigned long long seed = 42) {
+              PhotonBatch batch;
+              generate_photons_on_device(source, batch, num_photons, seed);
+              return batch;
+          },
+          py::arg("source"), py::arg("num_photons"), py::arg("seed") = 42,
+          "Generate photons from any source type on the GPU.\n\n"
+          "This is the unified interface that works with all source types:\n"
+          "  - IsotropicPointSource\n"
+          "  - CollimatedBeamSource\n"
+          "  - SpotSource\n"
+          "  - GaussianBeamSource\n"
+          "  - FocusedSpotSource\n\n"
+          "Args:\n"
+          "    source: Any PhotonSource type (see list above)\n"
+          "    num_photons (int): Number of photons to generate\n"
+          "    seed (int, optional): Random seed for generation. Defaults to 42.\n\n"
+          "Returns:\n"
+          "    PhotonBatch: A batch of photons on the GPU\n\n"
+          "Example:\n"
+          "    >>> # Collimated beam\n"
+          "    >>> source = osg.CollimatedBeamSource()\n"
+          "    >>> source.position = osg.float3(0, 0, -1)\n"
+          "    >>> source.direction = osg.float3(0, 0, 1)\n"
+          "    >>> batch = osg.generate_photons(source, 10000)\n"
+          "    >>> \n"
+          "    >>> # Isotropic point source\n"
+          "    >>> source = osg.IsotropicPointSource()\n"
+          "    >>> source.position = osg.float3(0, 0, 0)\n"
+          "    >>> batch = osg.generate_photons(source, 10000)\n");
 
     // ============================================
     // Material System
