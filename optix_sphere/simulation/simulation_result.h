@@ -1,9 +1,5 @@
 #pragma once
 
-// AABB and other common types might be needed here eventually,
-// but for now, let's keep it focused on results.
-
-// 模拟结果
 struct SimulationResult {
     double detected_flux;       // 探测器收集的总通量 (W) - double精度
     double irradiance;          // 辐照度 (W/m²) - double精度

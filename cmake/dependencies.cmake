@@ -1,5 +1,7 @@
 # External dependencies management (via Git Submodules)
 # This file adds the dependencies stored as Git submodules in the 'vendor' directory.
+# initialized and updated via:
+#   git submodule update --init --recursive
 
 message(STATUS "Loading dependencies from 'vendor' directory...")
 
@@ -14,6 +16,7 @@ message(STATUS "  -> Loaded googletest")
 # The CMakeLists for tinyobjloader allows disabling tests, which we don't need.
 set(TINYOBJLOADER_BUILD_TEST OFF CACHE BOOL "")
 add_subdirectory(vendor/tinyobjloader)
+set_target_properties(tinyobjloader PROPERTIES POSITION_INDEPENDENT_CODE ON)
 message(STATUS "  -> Loaded tinyobjloader")
 
 # nlohmann/json
@@ -25,6 +28,7 @@ message(STATUS "  -> Loaded nlohmann_json")
 
 # spdlog
 add_subdirectory(vendor/spdlog)
+set_target_properties(spdlog PROPERTIES POSITION_INDEPENDENT_CODE ON)
 message(STATUS "  -> Loaded spdlog")
 
 message(STATUS "✅ All external dependencies loaded from submodules.")

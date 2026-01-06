@@ -79,7 +79,9 @@ def setup_integrating_sphere_geometry():
    # Choose sphere geometry
     # 25.4 mm diameter sphere with 0.01 mm port thickness
     mesh_path = os.path.join(
-        "E:/workspace/Optix_sphere/assets/port_thickness",
+        # "E:/workspace/Optix_sphere/assets/port_thickness",
+        os.path.dirname(os.path.abspath(__file__)),
+        "../assets/port_thickness",  
         "integrating_sphere_25.4_0.01.obj"
     )
 

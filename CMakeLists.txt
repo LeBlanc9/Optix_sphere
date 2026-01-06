@@ -1,16 +1,19 @@
 cmake_minimum_required(VERSION 3.23)
 project(optix_test LANGUAGES CXX CUDA)
 
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Set CUDA C++ standard to 20
-set(CMAKE_CUDA_STANDARD 20)
+set(CMAKE_CUDA_STANDARD 17)
 set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 
-# Auto-detect GPU architecture (native = compile for local GPU)
-set(CMAKE_CUDA_ARCHITECTURES native)
+#  auto-detection CUDA ARCH
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/detect_cuda_arch.cmake)
+detect_cuda_architectures(DETECTED_ARCH)
+set(CMAKE_CUDA_ARCHITECTURES ${DETECTED_ARCH})
+message(STATUS "Auto-detected CUDA architecture: ${CMAKE_CUDA_ARCHITECTURES}")
 
 # OptiX 路径
 if(WIN32)
@@ -226,23 +229,14 @@ else()
 endif()
 
 message(STATUS "")
-message(STATUS "====================================")
-message(STATUS "Optix Sphere - Modular Build")
-message(STATUS "====================================")
 if (SKBUILD OR BUILD_PYTHON_BINDINGS)
     message(STATUS "Mode: Python Package Build")
     message(STATUS "Libraries: photon, media, sphere")
-    message(STATUS "Final Target: _core.pyd (Python module)")
 else()
     message(STATUS "Mode: C++ Development Build")
     message(STATUS "Libraries: photon, media, sphere")
     message(STATUS "Final Targets: main_test.exe, test_layered_medium.exe")
     message(STATUS "")
-    message(STATUS "Commands:")
-    message(STATUS "  Build:   cmake -B build && cmake --build build --config Debug")
-    message(STATUS "  Test:    cd build && ctest -C Debug --verbose")
-    message(STATUS "  Run main:    build/Debug/main_test.exe")
-    message(STATUS "  Run media:   build/Debug/test_layered_medium.exe")
 endif()
 message(STATUS "====================================")
 message(STATUS "")
