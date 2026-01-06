@@ -1,7 +1,7 @@
 #include "path_tracer.h"
 #include "simulation/device_params.h"
 #include "constants.h"
-#include "photon/launchers.h" // Still needed for generate_photons_on_device in Simulator
+#include "photon/launchers.h"
 #include <spdlog/spdlog.h>
 #include <thrust/device_vector.h>
 #include <thrust/reduce.h>      // For thrust::reduce

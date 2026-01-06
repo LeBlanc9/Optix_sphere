@@ -1,13 +1,16 @@
 #pragma once
 
-#include "utils/vector_types.h" // Re-introducing for float3
 #include <vector>
 #include <memory>
 #include <numeric>
 
+struct float3;
+
+
 namespace phonder {
 
-// A simple struct to hold a batch of photons on the host.
+struct DeviceData;
+
 struct HostPhotonBatch {
     std::vector<float3> positions;
     std::vector<float3> directions;
@@ -20,8 +23,6 @@ struct HostPhotonBatch {
     }
 };
 
-// Forward-declare for the PIMPL pattern
-struct DeviceData;
 
 /**
  * @class PhotonBatch

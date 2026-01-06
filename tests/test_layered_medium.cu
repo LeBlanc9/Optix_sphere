@@ -57,7 +57,6 @@ int main() {
     double transmitted_weight_sum = host_result.transmitted_batch.total_weight();
     
     double specular_reflection = host_result.specular_reflection_weight;
-    double diffuse_reflection = reflected_weight_sum; // The to_host() copy doesn't distinguish specular from diffuse in the batch itself
 
     std::cout << std::endl;
     std::cout << "=== Results ===" << std::endl;

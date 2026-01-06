@@ -1,6 +1,7 @@
 #include "photon_batch.h"
 #include <thrust/device_vector.h>
 #include <thrust/copy.h>
+#include "utils/vector_types.h"
 
 namespace phonder {
 

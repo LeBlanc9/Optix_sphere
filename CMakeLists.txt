@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.18)
+cmake_minimum_required(VERSION 3.23)
 project(optix_test LANGUAGES CXX CUDA)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -8,19 +8,6 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # Set CUDA C++ standard to 20
 set(CMAKE_CUDA_STANDARD 20)
 set(CMAKE_CUDA_STANDARD_REQUIRED ON)
-
-# Option to control building Python bindings (also set automatically when using scikit-build)
-option(BUILD_PYTHON_BINDINGS "Build Python bindings via pybind11" OFF)
-
-if(MSVC)
-    add_compile_definitions(_SILENCE_STDEXT_ARR_ITERS_DEPRECATION_WARNING NOMINMAX)
-    # Add /utf-8 for C++ files
-    add_compile_options($<$<COMPILE_LANGUAGE:CXX>:/utf-8>)
-    # Add /utf-8 for CUDA files via -Xcompiler
-    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Xcompiler=/utf-8")
-    # Enable relaxed constexpr for CUDA to support std::format
-    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --expt-relaxed-constexpr")
-endif()
 
 # OptiX 路径
 if(WIN32)
@@ -33,6 +20,10 @@ set(OptiX_INCLUDE "${OptiX_INSTALL_DIR}/include")
 # CUDA
 find_package(CUDAToolkit REQUIRED)
 set(CMAKE_CUDA_RUNTIME_LIBRARY Shared)
+
+# Suppress NVCC warnings and enable relaxed constexpr for Thrust compatibility
+add_compile_options($<$<COMPILE_LANGUAGE:CUDA>:-diag-suppress=27>)
+add_compile_options($<$<COMPILE_LANGUAGE:CUDA>:--expt-relaxed-constexpr>)
 
 include(cmake/dependencies.cmake)
 
@@ -143,7 +134,7 @@ message(STATUS "Library 'media' configured, depends on 'photon'.")
 add_library(sphere STATIC
     optix_sphere/simulation/optix_context.cpp
     optix_sphere/scene/scene.cpp
-    optix_sphere/simulation/path_tracer.cpp
+    optix_sphere/simulation/path_tracer.cu
     optix_sphere/simulation/optix_pipeline_builder.cpp
     optix_sphere/simulation/optix_sbt_builder.cpp
     optix_sphere/geometry/mesh_loader.cpp
@@ -172,23 +163,25 @@ target_link_libraries(sphere PUBLIC
     CUDA::cudart
 )
 message(STATUS "Library 'sphere' configured, depends on 'photon'.")
+target_compile_definitions(sphere PRIVATE FMT_UNICODE=0)
 
 # ============================================
 # Final Target Linking
 # ============================================
 
+option(BUILD_PYTHON_BINDINGS "Build Python bindings via pybind11" OFF)
 if (SKBUILD OR BUILD_PYTHON_BINDINGS)
     # Python Bindings
     message(STATUS "Configuring Python bindings...")
     find_package(pybind11 CONFIG REQUIRED)
     pybind11_add_module(_core
-        optix_sphere/python/bindings.cpp
+        optix_sphere/python/bindings.cu
     )
-    # The Python module needs to link to all relevant libraries
     target_link_libraries(_core PRIVATE
         sphere
         media
     )
+    target_compile_definitions(_core PRIVATE FMT_UNICODE=0)
     if (SKBUILD)
         install(TARGETS _core LIBRARY DESTINATION ${SKBUILD_PLATLIB_DIR}/optix_sphere)
 
@@ -220,12 +213,19 @@ else()
     )
     add_test(NAME IntegrationTest COMMAND main_test)
 
-    # Layered medium test (only needs media module)
+    # Layered medium test
     add_executable(test_layered_medium tests/test_layered_medium.cu)
     target_link_libraries(test_layered_medium PRIVATE
         media
     )
     add_test(NAME LayeredMediumTest COMMAND test_layered_medium)
+
+    add_executable(test_spd tests/spd.cu)
+    target_link_libraries(test_spd PRIVATE
+        sphere
+        media
+    )
+    target_compile_definitions(test_spd PRIVATE FMT_UNICODE=0)
 
 endif()
 
