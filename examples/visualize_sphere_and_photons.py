@@ -105,10 +105,6 @@ def visualize_sphere_and_photons(mesh_path, photon_batch, num_display=1000):
 
 
 if __name__ == "__main__":
-    print("="*70)
-    print("Sphere and Photon Visualization")
-    print("="*70)
-
     # 1. Generate photons
     print("\n1. Generating photons...")
     source = osg.CollimatedBeamSource()
@@ -122,7 +118,7 @@ if __name__ == "__main__":
     # 2. Transform to sphere coordinates
     print("\n2. Transforming to sphere port...")
 
-    photon_batch = osg.translate_photons(photon_batch, osg.float3(0, 0, 80))
+    osg.translate_photons_inplace(photon_batch, osg.float3(0, 0, 80))
 
     # 3. Load sphere mesh
     mesh_path = (

@@ -40,7 +40,7 @@ int main() {
         Simulator simulator;
 
         // Configure and build the scene from a file
-        fs::path mesh_path = fs::path("E:/workspace/Optix_sphere/assets/port_thickness") / "integrating_sphere_25.4_0.01.obj";
+        fs::path mesh_path = fs::path("E:/workspace/Optix_sphere/assets") / "R_25.4_1mm.obj";
 
         // === NEW: Define custom materials using factory functions ===
         const float wall_reflectance = 0.98f;

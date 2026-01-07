@@ -1,4 +1,5 @@
 import optix_sphere._core as osg
+from pathlib import Path
 import time
 import os
 
@@ -26,13 +27,14 @@ def main():
     materials["detector_material"] = osg.material.detector()
 
     # --- Asset Path ---
-    mesh_path = os.path.join("E:/workspace/Optix_sphere/assets/port_thickness", "integrating_sphere_25.4_0.01.obj")
+    # mesh_path = os.path.join("E:/workspace/Optix_sphere/assets/port_thickness", "integrating_sphere_25.4_0.01.obj")
+    mesh_path = (Path(__file__).parent.parent / "assets/R_25.4_1mm.obj")
         
     # --- Simulation ---
     simulator = osg.Simulator()
 
     start_build = time.time()
-    simulator.build_scene_from_file(mesh_path, materials, mesh_config)
+    simulator.build_scene_from_file(str(mesh_path), materials, mesh_config)
     end_build = time.time()
     print(f"   ✅ Scene built in {end_build - start_build:.3f} seconds.")
 

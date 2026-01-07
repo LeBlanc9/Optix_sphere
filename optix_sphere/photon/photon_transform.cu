@@ -32,8 +32,23 @@ PhotonBatch translate_photons(
     // ensuring the data is consistent.
     PhotonBatch result = input_batch;
 
+    // Translate the copy in-place
+    translate_photons_inplace(result, offset);
+
+    return result;
+}
+
+void translate_photons_inplace(
+    PhotonBatch& batch,
+    float3 offset
+) {
+    size_t num_photons = batch.size();
+    if (num_photons == 0) {
+        return; // Nothing to do for empty batch
+    }
+
     // Get a writeable pointer to the device-side data.
-    float3* pos_ptr = result.positions_ptr();
+    float3* pos_ptr = batch.positions_ptr();
 
     // Launch kernel to translate positions
     const int block_size = 256;
@@ -49,15 +64,13 @@ PhotonBatch translate_photons(
     cudaError_t err = cudaGetLastError();
     if (err != cudaSuccess) {
         throw std::runtime_error(
-            std::string("CUDA kernel error in translate_photons: ") +
+            std::string("CUDA kernel error in translate_photons_inplace: ") +
             cudaGetErrorString(err)
         );
     }
 
     // Wait for kernel completion
     cudaDeviceSynchronize();
-
-    return result;
 }
 
 } // namespace phonder

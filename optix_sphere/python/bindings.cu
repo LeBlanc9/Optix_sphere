@@ -111,8 +111,31 @@ PYBIND11_MODULE(_core, m) {
 
     m.def("translate_photons", &translate_photons,
           py::arg("input_batch"), py::arg("offset"),
-          "Translate photon positions by a fixed offset.");
+          "Translate photon positions by a fixed offset (creates new batch).\n\n"
+          "Args:\n"
+          "    input_batch (PhotonBatch): Input photon batch on GPU\n"
+          "    offset (float3): Translation vector (mm)\n\n"
+          "Returns:\n"
+          "    PhotonBatch: New batch with translated positions\n\n"
+          "Example:\n"
+          "    >>> batch = osg.generate_photons(source, 10000)\n"
+          "    >>> translated = osg.translate_photons(batch, osg.float3(0, 0, -12.7))\n"
+          "    >>> # Original batch is unchanged\n");
 
+    m.def("translate_photons_inplace", &translate_photons_inplace,
+          py::arg("batch"), py::arg("offset"),
+          "Translate photon positions in-place (modifies batch directly).\n\n"
+          "More efficient than translate_photons() as it avoids memory allocation.\n"
+          "Use this for large batches to save memory.\n\n"
+          "Args:\n"
+          "    batch (PhotonBatch): Photon batch to modify (will be changed!)\n"
+          "    offset (float3): Translation vector (mm)\n\n"
+          "Returns:\n"
+          "    None (modifies batch in-place)\n\n"
+          "Example:\n"
+          "    >>> batch = osg.generate_photons(source, 10000)\n"
+          "    >>> osg.translate_photons_inplace(batch, osg.float3(0, 0, -12.7))\n"
+          "    >>> # batch has been modified\n");
 
     py::class_<IsotropicPointSource>(m, "IsotropicPointSource")
         .def(py::init<>())

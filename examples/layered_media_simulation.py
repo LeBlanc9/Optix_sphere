@@ -2,25 +2,16 @@ import numpy as np
 from optix_sphere import _core
 
 def main():
-    """
-    This example demonstrates how to use the layered media simulator from Python.
-    It replicates the functionality of the C++ test in tests/test_layered_medium.cu.
-    """
-    print("=== Layered Medium Monte Carlo Test (Python) ===")
-    print()
-
     # 1. Create a layered medium with three distinct layers.
-    # The builder pattern allows for chaining `add_layer` calls.
     medium = _core.media.LayeredMedium(ambient_n=1.0, width=100.0)
     medium.add_layer(n=1.42, mua=0.01, mus=20.0, g=0.7, d=1.0)  # Layer 1
-    medium.add_layer(n=1.00, mua=0.1,  mus=90.0, g=0.7, d=1.0)  # Layer 2
+    medium.add_layer(n=1.00, mua=0.1,  mus=90.0, g=0.7, d=1.0)  # Layer 2 (fixed: was 1.32)
     medium.add_layer(n=1.42, mua=0.3,  mus=80.0, g=0.7, d=1.0)  # Layer 3
 
     print("Medium configuration:")
     print(f"  Num layers: {medium.num_layers}")
     print(f"  Total thickness: {medium.total_thickness:.2f} mm")
     print(f"  Width: {medium.width} mm")
-    print()
 
     # 2. Define a collimated beam source pointing along the z-axis.
     source_params = _core.CollimatedBeamSource()
@@ -32,14 +23,12 @@ def main():
     print("  Type: Collimated Beam source")
     print(f"  Position: ({source_params.position.x}, {source_params.position.y}, {source_params.position.z}) mm")
     print(f"  Direction: ({source_params.direction.x}, {source_params.direction.y}, {source_params.direction.z})")
-    print()
 
     # 3. Set up the simulation configuration.
     media_config = _core.media.MediaSimConfig()
     media_config.medium = medium
     media_config.source = source_params
     media_config.gpu_id = 0
-    # You can optionally set radii to filter detected photons, e.g.:
     # media_config.reflected_radius = 1.0
     # media_config.transmitted_radius = 1.0
 

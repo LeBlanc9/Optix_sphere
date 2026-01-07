@@ -28,4 +28,24 @@ PhotonBatch translate_photons(
     float3 offset
 );
 
+/**
+ * @brief Translate photon positions in-place by a fixed offset
+ *
+ * This function modifies the input batch directly, avoiding memory allocation.
+ * More efficient than translate_photons() for large batches.
+ *
+ * @param batch The photon batch to modify (will be changed)
+ * @param offset The 3D translation vector (mm)
+ *
+ * @example
+ * ```cpp
+ * // In-place modification (no copy)
+ * translate_photons_inplace(batch, make_float3(0.0f, 0.0f, -12.7f));
+ * ```
+ */
+void translate_photons_inplace(
+    PhotonBatch& batch,
+    float3 offset
+);
+
 } // namespace phonder
