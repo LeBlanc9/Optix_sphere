@@ -80,7 +80,29 @@ PYBIND11_MODULE(_core, m) {
              py::arg("photon_source"), py::arg("config"))
         .def("run", static_cast<SimulationResult (Simulator::*)(const phonder::PhotonBatch&, const SimConfig&)>(&Simulator::run),
              py::arg("source_batch"), py::arg("config"))
-        .def("get_detector_total_area", &Simulator::get_detector_total_area);
+        .def("get_detector_total_area", &Simulator::get_detector_total_area)
+        .def("update_material", &Simulator::update_material,
+             py::arg("name"), py::arg("factory"),
+             "Update a single material without rebuilding the scene geometry.\n\n"
+             "This is a fast operation that only updates material parameters.\n"
+             "Changes take effect on the next run().\n\n"
+             "Args:\n"
+             "    name (str): Material name to update (must exist in scene)\n"
+             "    factory (MaterialFactory): Factory function to create new material\n\n"
+             "Raises:\n"
+             "    RuntimeError: If material name not found or scene not built\n\n"
+             "Example:\n"
+             "    >>> from optix_sphere import Simulator, material\n"
+             "    >>> sim = Simulator()\n"
+             "    >>> sim.build_scene_from_file('sphere.obj', config)\n"
+             "    >>> \n"
+             "    >>> # Update wall material reflectance\n"
+             "    >>> sim.update_material('wall_material', material.lambertian(0.95))\n"
+             "    >>> result = sim.run(source, config)  # Uses new material\n"
+             "    >>> \n"
+             "    >>> # Change to mixed material\n"
+             "    >>> sim.update_material('wall_material', material.mixed(0.7, 0.3, 0.98))\n"
+             "    >>> result = sim.run(source, config)  # Uses updated material\n");
 
     // Bind HostPhotonBatch to expose data to Python as numpy arrays
     py::class_<HostPhotonBatch>(m, "HostPhotonBatch")

@@ -64,8 +64,9 @@ public:
     size_t get_sbt_data_size() const override;
     void write_sbt_data(void* dest) const override;
 
-    // Accessor for reflectance
+    // Accessors
     float get_reflectance() const { return reflectance_; }
+    void set_reflectance(float reflectance) { reflectance_ = reflectance; }
 
 private:
     float reflectance_;

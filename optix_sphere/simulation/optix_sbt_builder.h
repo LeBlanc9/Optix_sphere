@@ -23,6 +23,17 @@ public:
     void build_sbt(const OptixPipelineBuilder& pipeline_builder, const Scene& scene);
 
     /**
+     * @brief 更新 SBT 中的材质数据（不重建整个 SBT）
+     *
+     * This is a fast operation that only updates the material parameters
+     * in the hitgroup records without rebuilding the entire SBT structure.
+     *
+     * @param pipeline_builder Pipeline builder（提供 program groups）
+     * @param scene Scene with updated materials
+     */
+    void update_materials(const OptixPipelineBuilder& pipeline_builder, const Scene& scene);
+
+    /**
      * @brief 获取构建好的 SBT
      */
     const OptixShaderBindingTable& get_sbt() const { return sbt_; }

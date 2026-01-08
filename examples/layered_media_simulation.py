@@ -4,9 +4,22 @@ from optix_sphere import _core
 def main():
     # 1. Create a layered medium with three distinct layers.
     medium = _core.media.LayeredMedium(ambient_n=1.0, width=100.0)
-    medium.add_layer(n=1.42, mua=0.01, mus=20.0, g=0.7, d=1.0)  # Layer 1
-    medium.add_layer(n=1.00, mua=0.1,  mus=90.0, g=0.7, d=1.0)  # Layer 2 (fixed: was 1.32)
-    medium.add_layer(n=1.42, mua=0.3,  mus=80.0, g=0.7, d=1.0)  # Layer 3
+    # medium.add_layer(n=1.42, mua=0.01, mus=20.0, g=0.7, d=1.0)  # Layer 1
+    # medium.add_layer(n=1.00, mua=0.1,  mus=90.0, g=0.7, d=1.0)  # Layer 2 (fixed: was 1.32)
+    # medium.add_layer(n=1.42, mua=0.3,  mus=80.0, g=0.7, d=1.0)  # Layer 3
+
+    n_glass = 1.458  # 样品容器折射率
+    mua_glass = 0.001
+    mus_glass = 0.001
+    def create_medium(mua, mus, thickness, n=1.338, g=0.9):
+        medium = _core.media.LayeredMedium(ambient_n=1.0, width=33.0)
+        medium.add_layer(n_glass, mua_glass, mus_glass, 1.0, 1.25)  # 上玻璃
+        medium.add_layer(n, mua, mus, g, thickness)                 # 样品
+        medium.add_layer(n_glass, mua_glass, mus_glass, 1.0, 1.25)  # 下玻璃
+        return medium
+
+    medium = create_medium(mua=0.01, mus=10.0, thickness=1.0)
+
 
     print("Medium configuration:")
     print(f"  Num layers: {medium.num_layers}")
@@ -29,8 +42,8 @@ def main():
     media_config.medium = medium
     media_config.source = source_params
     media_config.gpu_id = 0
-    # media_config.reflected_radius = 1.0
-    # media_config.transmitted_radius = 1.0
+    media_config.reflected_radius = 25.4 / 2
+    media_config.transmitted_radius = 25.4 / 2
 
     # 4. Initialize the simulator and run the Monte Carlo simulation.
     media_sim = _core.media.MediaSimulator(media_config)
@@ -39,37 +52,22 @@ def main():
     print(f"Running simulation with {num_photons_to_simulate} photons...")
     device_result = media_sim.run(num_photons_to_simulate)
 
-    # 5. Copy results from the GPU to the host for analysis.
-    print("Copying results to host for analysis...")
-    host_result = device_result.to_host()
 
-    # The .weights attribute is a NumPy array, so we can use np.sum().
-    reflected_weight_sum = np.sum(host_result.reflected_batch.weights)
-    transmitted_weight_sum = np.sum(host_result.transmitted_batch.weights)
-    
-    specular_reflection = host_result.specular_reflection_weight
 
-    # 6. Print a summary of the results.
-    print()
-    print("=== Results ===")
-    print(f"  Reflected photons: {host_result.reflected_batch.size()}")
-    print(f"  Transmitted photons: {host_result.transmitted_batch.size()}")
-    print()
+    # 5. Print a summary of the results.
+    reflected_weight_sum = device_result.reflected_batch.total_weight()
+    transmitted_weight_sum = device_result.transmitted_batch.total_weight()
+
+
+    print(f"  Reflected photons: {device_result.reflected_batch.size()}")
+    print(f"  Transmitted photons: {device_result.transmitted_batch.size()}")
 
     print("Normalized weights (per incident photon):")
-    total_reflected = (reflected_weight_sum + specular_reflection) / num_photons_to_simulate
+    total_reflected = reflected_weight_sum / num_photons_to_simulate
     total_transmitted = transmitted_weight_sum / num_photons_to_simulate
     
     print(f"  Total Reflected:    {total_reflected:.6f}")
-    print(f"    - Specular:       {specular_reflection / num_photons_to_simulate:.6f}")
-    print(f"    - Diffuse:        {reflected_weight_sum / num_photons_to_simulate:.6f}")
     print(f"  Total Transmitted:  {total_transmitted:.6f}")
-    print(f"  Total (R+T):        {total_reflected + total_transmitted:.6f}")
-    print(f"  Absorbed:           {1.0 - (total_reflected + total_transmitted):.6f}")
-    print()
-
-    print("✅ Test completed successfully!")
-
 
 if __name__ == "__main__":
     main()

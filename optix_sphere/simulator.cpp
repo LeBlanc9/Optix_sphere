@@ -124,3 +124,17 @@ float Simulator::get_detector_total_area() const {
     }
     return pimpl_->scene_->get_detector_total_area();
 }
+
+void Simulator::update_material(const std::string& name, const MaterialFactory& factory) {
+    if (!pimpl_->scene_is_built_ || !pimpl_->scene_) {
+        throw std::runtime_error("Cannot update material before a scene is built. Call 'build_scene_from_file' first.");
+    }
+
+    spdlog::info("🔄 Updating material '{}' (fast path, no geometry rebuild)", name);
+
+    // Update material in the scene
+    // SBT will be automatically rebuilt on next run() with the new material
+    pimpl_->scene_->update_material(name, factory, make_float3(0.0f, 0.0f, 0.0f));
+
+    spdlog::info("✅ Material '{}' updated. Changes will take effect on next run()", name);
+}

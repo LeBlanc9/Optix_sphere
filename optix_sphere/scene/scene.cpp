@@ -182,9 +182,11 @@ void Scene::build_scene(
 
     // 6. Create material instances using material factories
     materials_.resize(mesh.get_material_count());
+    material_name_to_index_.clear();  // Clear old mappings
     for (size_t i = 0; i < mesh.material_factories.size(); ++i) {
         const auto& [name, factory] = mesh.material_factories[i];
         materials_[i] = factory(sphere_params.center);  // Call factory with sphere center
+        material_name_to_index_[name] = i;  // Store name-to-index mapping
         spdlog::info("Created material [{}]: {}", i, name);
     }
 
@@ -245,4 +247,50 @@ void Scene::build_scene(
     }
 
     spdlog::info("✅ Scene built successfully");
+}
+
+// ============================================
+// Material Update Methods
+// ============================================
+
+void Scene::update_material(
+    const std::string& name,
+    const MaterialFactory& factory,
+    const float3& sphere_center
+) {
+    spdlog::info("Updating material '{}' (fast path, no geometry rebuild)", name);
+
+    // Find material index
+    auto it = material_name_to_index_.find(name);
+    if (it == material_name_to_index_.end()) {
+        std::string error_msg = "Material '" + name + "' not found in scene. Available materials: ";
+        auto available = get_material_names();
+        for (size_t i = 0; i < available.size(); ++i) {
+            if (i > 0) error_msg += ", ";
+            error_msg += available[i];
+        }
+        spdlog::error(error_msg);
+        throw std::runtime_error(error_msg);
+    }
+
+    size_t mat_idx = it->second;
+    if (mat_idx >= materials_.size()) {
+        std::string error_msg = "Invalid material index " + std::to_string(mat_idx) +
+                               " for '" + name + "'";
+        spdlog::error(error_msg);
+        throw std::runtime_error(error_msg);
+    }
+
+    // Create new material using factory (same logic as build_scene)
+    materials_[mat_idx] = factory(sphere_center);
+    spdlog::info("✅ Updated material [{}]: {}", mat_idx, name);
+}
+
+std::vector<std::string> Scene::get_material_names() const {
+    std::vector<std::string> names;
+    names.reserve(material_name_to_index_.size());
+    for (const auto& [name, idx] : material_name_to_index_) {
+        names.push_back(name);
+    }
+    return names;
 }

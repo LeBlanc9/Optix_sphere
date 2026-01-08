@@ -17,6 +17,16 @@ void OptixSBTBuilder::build_sbt(const OptixPipelineBuilder& pipeline_builder, co
     spdlog::info("✅ SBT created successfully");
 }
 
+void OptixSBTBuilder::update_materials(const OptixPipelineBuilder& pipeline_builder, const Scene& scene) {
+    spdlog::info("Updating SBT materials (reusing hitgroup records buffer)");
+
+    // Simply recreate hitgroup records - this will read updated materials from scene
+    // The buffer is already allocated, so this just updates the GPU memory
+    create_hitgroup_records(pipeline_builder, scene);
+
+    spdlog::info("✅ SBT materials updated successfully");
+}
+
 void OptixSBTBuilder::create_raygen_record(OptixProgramGroup raygen_pg) {
     char raygen_header[OPTIX_SBT_RECORD_HEADER_SIZE];
     OPTIX_CHECK(optixSbtRecordPackHeader(raygen_pg, &raygen_header));

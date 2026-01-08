@@ -67,6 +67,32 @@ public:
         return reinterpret_cast<const uint3*>(index_buffer_.get_cu_ptr());
     }
 
+    /**
+     * Update a single material without rebuilding the scene geometry
+     * Fast operation that only updates material parameters and SBT
+     * @param name Material name to update
+     * @param factory MaterialFactory function to create new material instance
+     * @param sphere_center Sphere center for spherical materials (usually unchanged)
+     * @throws std::runtime_error if material name not found
+     *
+     * @example
+     * ```cpp
+     * // Update wall material with new reflectance
+     * scene.update_material("wall_material", material::lambertian(0.98), sphere_center);
+     * ```
+     */
+    void update_material(
+        const std::string& name,
+        const MaterialFactory& factory,
+        const float3& sphere_center
+    );
+
+    /**
+     * Get material names registered in the scene
+     * @return Vector of material names
+     */
+    std::vector<std::string> get_material_names() const;
+
 private:
     const OptixContext& context_;
 
@@ -80,6 +106,9 @@ private:
 
     // Material system - polymorphic materials for different surface types
     std::vector<std::shared_ptr<Material>> materials_;
+
+    // Material name to index mapping (for fast material updates)
+    std::map<std::string, size_t> material_name_to_index_;
 
     // Extracted detector parameters (from mesh) for NEE
     float3 detector_position_ = {0, 0, 0};

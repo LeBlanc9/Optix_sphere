@@ -91,6 +91,25 @@ public:
      */
     float get_detector_total_area() const;
 
+    /**
+     * @brief 更新单个材质参数（不重建几何结构）
+     *
+     * 快速操作，仅更新材质定义。下次调用 run() 时会自动使用新材质。
+     * 不会重建耗时的 BVH 几何加速结构。
+     *
+     * @param name 要更新的材质名称（必须在场景中已存在）
+     * @param factory MaterialFactory 函数，用于创建新的材质实例
+     * @throws std::runtime_error 如果材质名称未找到或场景未构建
+     *
+     * @example
+     * ```cpp
+     * // 更新墙面材质的反射率
+     * simulator.update_material("wall_material", material::lambertian(0.95));
+     * simulator.run(source, config);  // 自动使用新材质
+     * ```
+     */
+    void update_material(const std::string& name, const MaterialFactory& factory);
+
 private:
     // 使用PIMPL模式（指向实现的指针）来隐藏内部实现细节，
     // 避免在头文件中暴露OptiX等底层库的头文件，降低编译依赖。
