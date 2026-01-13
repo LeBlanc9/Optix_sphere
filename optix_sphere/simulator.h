@@ -21,8 +21,9 @@ class Simulator {
 public:
     /**
      * @brief 构造函数，初始化仿真器核心组件。
+     * @param device_id CUDA 设备 ID (默认 0)。
      */
-    Simulator();
+    explicit Simulator(int device_id = 0);
 
     /**
      * @brief 析构函数。
@@ -53,7 +54,11 @@ public:
      * materials["wall_material"] = mixed(0.7, 0.3, 0.98);
      * materials["detector_material"] = detector();
      *
+     * // 对于球面材质，需要指定球心
+     * materials["sphere_wall"] = spherical_mixed(0.7, 0.3, 0.98, make_float3(0, 0, 0));
+     *
      * // 使用自定义材质构建场景
+     * MeshSceneConfig config;
      * simulator.build_scene_from_file(mesh_path, materials, config);
      * ```
      */
@@ -111,8 +116,6 @@ public:
     void update_material(const std::string& name, const MaterialFactory& factory);
 
 private:
-    // 使用PIMPL模式（指向实现的指针）来隐藏内部实现细节，
-    // 避免在头文件中暴露OptiX等底层库的头文件，降低编译依赖。
     class Pimpl;
     std::unique_ptr<Pimpl> pimpl_;
 };

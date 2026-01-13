@@ -12,11 +12,6 @@ struct Sphere {
     float reflectance = 0.99f;            // dimensionless [0,1]
 };
 
-// 各向同性点光源
-struct LightSource {
-    float3 position = {0.0f, 0.0f, 0.0f}; // mm
-    float power = 1.0f;                    // W
-};
 
 // 简单的圆形平面探测器
 struct Detector {
@@ -36,6 +31,5 @@ struct SimConfig {
 
 struct MeshSceneConfig {
     // 预留给未来扩展（例如：全局缩放、坐标系转换等）
-    // 注意：材质反射率现在通过 MaterialFactory 直接指定，不再使用全局默认值
 };
 

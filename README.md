@@ -53,70 +53,7 @@ cmake --build . --config Release
 
 ```python
 import optix_sphere as opt
-
-# Create sphere
-sphere = opt.Sphere()
-sphere.radius = 50.0  # mm
-sphere.reflectance = 0.98
-
-# Create light source
-light = opt.LightSource()
-light.power = 1.0  # W
-
-# Create detector
-detector = opt.Detector()
-opt.configure_detector_chord(detector, sphere, port_hole_radius=0.564)
-
-# Configure simulation
-config = opt.SimConfig()
-config.num_rays = 1_000_000
-config.max_bounces = 500
-
-# Run simulation
-sim = opt.Simulator()
-sim.setup_scene(sphere, detector)
-result = sim.run(config, light)
-
-print(f"Irradiance: {result.irradiance:.6e} W/mm²")
-print(f"Detected flux: {result.detected_flux:.6e} W")
-```
-
-## Quick Start (C++)
-
-```cpp
-#include "core/optix_context.h"
-#include "scene/scene.h"
-#include "simulation/path_tracer.h"
-
-int main() {
-    OptixContext context;
-
-    Sphere sphere;
-    sphere.radius = 50.0f;
-    sphere.reflectance = 0.98f;
-
-    Detector detector;
-    configure_detector_chord(detector, sphere, 0.564f);
-
-    Scene scene(context);
-    scene.build_scene(sphere, detector);
-
-    PathTracer tracer(context, scene, "forward_tracer.ptx");
-
-    SimConfig config;
-    config.num_rays = 1'000'000;
-
-    LightSource light;
-    light.power = 1.0f;
-
-    auto result = tracer.launch(config, light, detector);
-
-    return 0;
-}
-```
-
 ## Examples
-
 See the `examples/` directory:
 
 - `basic_simulation.py` - Simple integrating sphere simulation
@@ -144,22 +81,6 @@ Where:
 
 ## Project Structure
 
-```
-optix_sphere/
-├── src/
-│   ├── app/           # C++ standalone application
-│   ├── core/          # OptiX context management
-│   ├── scene/         # Geometry and scene construction
-│   ├── simulation/    # Path tracer and CUDA kernels
-│   ├── theory/        # Analytical solutions
-│   └── python/        # Python bindings
-├── include/           # Public headers
-├── python/            # Python package
-│   └── optix_sphere/
-├── examples/          # Example scripts
-├── tests/             # Unit tests
-└── pyproject.toml     # Python package configuration
-```
 
 ## Citation
 

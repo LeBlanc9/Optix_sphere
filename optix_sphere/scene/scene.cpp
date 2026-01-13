@@ -90,16 +90,15 @@ Scene::Scene(const OptixContext& context) : context_(context) {
     // Materials will be dynamically created based on mesh configuration
 }
 
-void Scene::build_scene(const std::string& mesh_path, const Sphere& sphere_params) {
+void Scene::build_scene(const std::string& mesh_path) {
     // Use default material factories
     auto material_factories = MeshLoader::get_default_materials();
-    build_scene(mesh_path, material_factories, sphere_params);
+    build_scene(mesh_path, material_factories);
 }
 
 void Scene::build_scene(
     const std::string& mesh_path,
-    const std::map<std::string, MaterialFactory>& material_factories,
-    const Sphere& sphere_params
+    const std::map<std::string, MaterialFactory>& material_factories
 ) {
     spdlog::info("Building scene from mesh: {}", mesh_path);
 
@@ -185,7 +184,7 @@ void Scene::build_scene(
     material_name_to_index_.clear();  // Clear old mappings
     for (size_t i = 0; i < mesh.material_factories.size(); ++i) {
         const auto& [name, factory] = mesh.material_factories[i];
-        materials_[i] = factory(sphere_params.center);  // Call factory with sphere center
+        materials_[i] = factory();  // Call factory (sphere center already captured in closure)
         material_name_to_index_[name] = i;  // Store name-to-index mapping
         spdlog::info("Created material [{}]: {}", i, name);
     }
@@ -199,7 +198,7 @@ void Scene::build_scene(
         if (mat_idx < static_cast<int>(mesh.material_factories.size())) {
             const auto& [name, factory] = mesh.material_factories[mat_idx];
             // Check if this is a detector material by creating a test instance
-            auto test_mat = factory(sphere_params.center);
+            auto test_mat = factory();
             if (test_mat->get_kernel_name() == "__closesthit__detector") {
                 uint3 idx = mesh.indices[i];
                 float3 v0 = mesh.vertices[idx.x];
@@ -255,8 +254,7 @@ void Scene::build_scene(
 
 void Scene::update_material(
     const std::string& name,
-    const MaterialFactory& factory,
-    const float3& sphere_center
+    const MaterialFactory& factory
 ) {
     spdlog::info("Updating material '{}' (fast path, no geometry rebuild)", name);
 
@@ -281,8 +279,8 @@ void Scene::update_material(
         throw std::runtime_error(error_msg);
     }
 
-    // Create new material using factory (same logic as build_scene)
-    materials_[mat_idx] = factory(sphere_center);
+    // Create new material using factory (sphere center already captured in closure)
+    materials_[mat_idx] = factory();
     spdlog::info("✅ Updated material [{}]: {}", mat_idx, name);
 }
 

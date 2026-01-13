@@ -16,6 +16,8 @@
 // headers, keeping the public `simulator.h` header clean and lightweight.
 class Simulator::Pimpl {
 public:
+    explicit Pimpl(int device_id) : context_(device_id) {}
+
     OptixContext context_;
     std::unique_ptr<Scene> scene_;
     std::unique_ptr<PathTracer> tracer_;
@@ -40,14 +42,15 @@ public:
 // Simulator Public API Implementation
 // =================================================================
 
-Simulator::Simulator() : pimpl_(std::make_unique<Pimpl>()) {
-    spdlog::info("Simulator created. Ready to build a scene.");
+Simulator::Simulator(int device_id) : pimpl_(std::make_unique<Pimpl>(device_id)) {
+    spdlog::info("Simulator created on device {}. Ready to build a scene.", device_id);
 }
 
 Simulator::~Simulator() = default; // Default destructor is fine with unique_ptr<Pimpl>
 
 void Simulator::build_scene_from_file(const std::string& file_path, const MeshSceneConfig& config) {
     // Use default material factories
+    spdlog::warn("⚠️  Using default material mapping. Consider specifying custom materials for better control.");
     auto material_factories = MeshLoader::get_default_materials();
     build_scene_from_file(file_path, material_factories, config);
 }
@@ -62,14 +65,11 @@ void Simulator::build_scene_from_file(
     // Create the scene object.
     pimpl_->scene_ = std::make_unique<Scene>(pimpl_->context_);
 
-    // Create a temporary Sphere object for the center coordinate.
-    // Material properties are now defined by MaterialFactory, not by this sphere.
-    Sphere sphere_geom;
-    sphere_geom.radius = -1.0f; // Indicates it's not an ideal sphere
-    sphere_geom.center = {0.0f, 0.0f, 0.0f};
-
     // Build the scene from the mesh file with custom material factories.
-    pimpl_->scene_->build_scene(file_path, material_factories, sphere_geom);
+    // Material properties (including sphere center for spherical materials) are
+    // already captured in the MaterialFactory closures.
+    // Note: config is kept for API compatibility but currently unused.
+    pimpl_->scene_->build_scene(file_path, material_factories);
     spdlog::info("✅ Scene built successfully from file.");
 
     // Now that the scene exists, create the path tracer.
@@ -134,7 +134,8 @@ void Simulator::update_material(const std::string& name, const MaterialFactory& 
 
     // Update material in the scene
     // SBT will be automatically rebuilt on next run() with the new material
-    pimpl_->scene_->update_material(name, factory, make_float3(0.0f, 0.0f, 0.0f));
+    // Sphere center (if needed) is already captured in the factory closure
+    pimpl_->scene_->update_material(name, factory);
 
     spdlog::info("✅ Material '{}' updated. Changes will take effect on next run()", name);
 }

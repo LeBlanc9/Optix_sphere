@@ -31,9 +31,9 @@ public:
 };
 
 // Type alias for material factory function
-// Takes sphere center (for future compatibility) and returns a shared_ptr to Material
-// Note: center parameter is currently unused but kept for API compatibility
-using MaterialFactory = std::function<std::shared_ptr<Material>(float3)>;
+// Returns a shared_ptr to Material
+// For spherical materials, the center is captured in the factory closure
+using MaterialFactory = std::function<std::shared_ptr<Material>()>;
 
 /**
  * LambertianMaterial - Ideal diffuse (Lambertian) reflector
@@ -277,8 +277,7 @@ namespace material {
  * @param reflectance Surface reflectance (0-1)
  */
 inline MaterialFactory lambertian(float reflectance) {
-    return [reflectance](float3 center) {
-        (void)center;  // Unused, kept for API compatibility
+    return [reflectance]() {
         return std::make_shared<LambertianMaterial>(reflectance);
     };
 }
@@ -290,8 +289,7 @@ inline MaterialFactory lambertian(float reflectance) {
  * @param reflectance Total reflectance (0-1)
  */
 inline MaterialFactory mixed(float diffuse_ratio, float specular_ratio, float reflectance) {
-    return [diffuse_ratio, specular_ratio, reflectance](float3 center) {
-        (void)center;  // Unused, kept for API compatibility
+    return [diffuse_ratio, specular_ratio, reflectance]() {
         return std::make_shared<MixedMaterial>(diffuse_ratio, specular_ratio, reflectance);
     };
 }
@@ -300,8 +298,7 @@ inline MaterialFactory mixed(float diffuse_ratio, float specular_ratio, float re
  * Create a detector material factory
  */
 inline MaterialFactory detector() {
-    return [](float3 center) {
-        (void)center;  // Unused
+    return []() {
         return std::make_shared<DetectorMaterial>();
     };
 }
@@ -310,8 +307,7 @@ inline MaterialFactory detector() {
  * Create an absorber (perfect black body) material factory
  */
 inline MaterialFactory absorber() {
-    return [](float3 center) {
-        (void)center;  // Unused, kept for API compatibility
+    return []() {
         return std::make_shared<AbsorberMaterial>();
     };
 }
@@ -323,9 +319,10 @@ inline MaterialFactory absorber() {
  * ONLY use for perfectly spherical surfaces without baffles
  *
  * @param reflectance Surface reflectance (0-1)
+ * @param center Sphere center for normal calculation
  */
-inline MaterialFactory spherical_lambertian(float reflectance) {
-    return [reflectance](float3 center) {
+inline MaterialFactory spherical_lambertian(float reflectance, float3 center) {
+    return [reflectance, center]() {
         return std::make_shared<SphericalLambertianMaterial>(reflectance, center);
     };
 }
@@ -339,9 +336,10 @@ inline MaterialFactory spherical_lambertian(float reflectance) {
  * @param diffuse_ratio Fraction using Lambertian scattering (0-1)
  * @param specular_ratio Fraction using specular reflection (0-1)
  * @param reflectance Total reflectance (0-1)
+ * @param center Sphere center for normal calculation
  */
-inline MaterialFactory spherical_mixed(float diffuse_ratio, float specular_ratio, float reflectance) {
-    return [diffuse_ratio, specular_ratio, reflectance](float3 center) {
+inline MaterialFactory spherical_mixed(float diffuse_ratio, float specular_ratio, float reflectance, float3 center) {
+    return [diffuse_ratio, specular_ratio, reflectance, center]() {
         return std::make_shared<SphericalMixedMaterial>(diffuse_ratio, specular_ratio, reflectance, center);
     };
 }

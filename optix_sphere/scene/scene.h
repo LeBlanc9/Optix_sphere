@@ -23,20 +23,17 @@ public:
     /**
      * Build scene from triangle mesh file
      * @param mesh_path Path to the OBJ mesh file
-     * @param sphere_params Sphere parameters (center and reflectance for wall material)
      */
-    void build_scene(const std::string& mesh_path, const Sphere& sphere_params);
+    void build_scene(const std::string& mesh_path);
 
     /**
      * Build scene from triangle mesh file with custom material factories
      * @param mesh_path Path to the OBJ mesh file
      * @param material_factories Map of OBJ material names to MaterialFactory
-     * @param sphere_params Sphere parameters (center for geometry calculations)
      */
     void build_scene(
         const std::string& mesh_path,
-        const std::map<std::string, MaterialFactory>& material_factories,
-        const Sphere& sphere_params
+        const std::map<std::string, MaterialFactory>& material_factories
     );
 
     OptixTraversableHandle get_traversable() const { return traversable_; }
@@ -72,19 +69,17 @@ public:
      * Fast operation that only updates material parameters and SBT
      * @param name Material name to update
      * @param factory MaterialFactory function to create new material instance
-     * @param sphere_center Sphere center for spherical materials (usually unchanged)
      * @throws std::runtime_error if material name not found
      *
      * @example
      * ```cpp
      * // Update wall material with new reflectance
-     * scene.update_material("wall_material", material::lambertian(0.98), sphere_center);
+     * scene.update_material("wall_material", material::lambertian(0.98));
      * ```
      */
     void update_material(
         const std::string& name,
-        const MaterialFactory& factory,
-        const float3& sphere_center
+        const MaterialFactory& factory
     );
 
     /**

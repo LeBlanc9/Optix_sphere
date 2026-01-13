@@ -23,7 +23,7 @@
  */
 class OptixContext {
 public:
-    OptixContext();
+    explicit OptixContext(int device_id = 0);
     ~OptixContext();
 
     // Disable copy and move
@@ -40,6 +40,7 @@ private:
 
     static void context_log_cb(unsigned int level, const char* tag, const char* message, void*);
 
+    int device_id_ = 0;
     OptixDeviceContext context_ = nullptr;
     CUcontext cuda_context_ = 0; // Not owned, just a handle
 };

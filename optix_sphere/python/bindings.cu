@@ -69,7 +69,16 @@ PYBIND11_MODULE(_core, m) {
         .def_readonly("total_flux_in_sphere", &TheoryResult::total_flux_in_sphere);
 
     py::class_<Simulator>(m, "Simulator")
-        .def(py::init<>(), "Initializes the OptiX Simulator.")
+        .def(py::init<int>(), py::arg("device_id") = 0,
+             "Initializes the OptiX Simulator.\n\n"
+             "Args:\n"
+             "    device_id (int, optional): CUDA device ID. Defaults to 0.\n\n"
+             "Example:\n"
+             "    >>> # Use default GPU 0\n"
+             "    >>> sim = Simulator()\n"
+             "    >>> \n"
+             "    >>> # Use GPU 1\n"
+             "    >>> sim = Simulator(device_id=1)\n")
         .def("build_scene_from_file",
              static_cast<void (Simulator::*)(const std::string&, const MeshSceneConfig&)>(&Simulator::build_scene_from_file),
              py::arg("file_path"), py::arg("config"))
@@ -272,23 +281,33 @@ PYBIND11_MODULE(_core, m) {
 
     material_module.def("spherical_lambertian", &material::spherical_lambertian,
                        py::arg("reflectance"),
+                       py::arg("center"),
                        "Create a spherical Lambertian material factory (optimized for spheres).\n\n"
                        "Uses spherical normal calculation - ~3-5x faster than triangle normals.\n"
                        "ONLY use for perfectly spherical surfaces without baffles.\n\n"
                        "Args:\n"
-                       "    reflectance (float): Surface reflectance (0-1)\n");
+                       "    reflectance (float): Surface reflectance (0-1)\n"
+                       "    center (float3): Sphere center for normal calculation\n\n"
+                       "Example:\n"
+                       "    >>> center = osg.float3(0, 0, 0)\n"
+                       "    >>> materials['wall'] = material.spherical_lambertian(0.98, center)\n");
 
     material_module.def("spherical_mixed", &material::spherical_mixed,
                        py::arg("diffuse_ratio"),
                        py::arg("specular_ratio"),
                        py::arg("reflectance"),
+                       py::arg("center"),
                        "Create a spherical mixed material factory (optimized for spheres).\n\n"
                        "Uses spherical normal calculation - ~3-5x faster than triangle normals.\n"
                        "ONLY use for perfectly spherical surfaces without baffles.\n\n"
                        "Args:\n"
                        "    diffuse_ratio (float): Fraction using Lambertian scattering (0-1)\n"
                        "    specular_ratio (float): Fraction using specular reflection (0-1)\n"
-                       "    reflectance (float): Total reflectance (0-1)\n");
+                       "    reflectance (float): Total reflectance (0-1)\n"
+                       "    center (float3): Sphere center for normal calculation\n\n"
+                       "Example:\n"
+                       "    >>> center = osg.float3(0, 0, 0)\n"
+                       "    >>> materials['wall'] = material.spherical_mixed(0.7, 0.3, 0.98, center)\n");
 
     material_module.def("get_default_materials", &material::get_default_materials,
                        "Get default material factory mapping.\n\n"

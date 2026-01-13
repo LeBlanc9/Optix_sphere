@@ -4,7 +4,7 @@
 #include <spdlog/spdlog.h>
 #include <spdlog/fmt/fmt.h>
 
-OptixContext::OptixContext() {
+OptixContext::OptixContext(int device_id) : device_id_(device_id) {
     try {
         init_cuda();
         init_optix();
@@ -26,17 +26,23 @@ OptixContext::~OptixContext() {
 }
 
 void OptixContext::init_cuda() {
-    CUDA_CHECK(cudaFree(0)); // Initializes the CUDA context
-    
     int device_count = 0;
     CUDA_CHECK(cudaGetDeviceCount(&device_count));
     if (device_count == 0) {
         throw std::runtime_error("No CUDA-capable devices found.");
     }
 
+    if (device_id_ < 0 || device_id_ >= device_count) {
+        throw std::runtime_error(fmt::format(
+            "Invalid device ID {}. Available devices: 0-{}", device_id_, device_count - 1));
+    }
+
+    CUDA_CHECK(cudaSetDevice(device_id_));
+    CUDA_CHECK(cudaFree(0)); // Initializes the CUDA context
+
     cudaDeviceProp props;
-    CUDA_CHECK(cudaGetDeviceProperties(&props, 0));
-    spdlog::info("✅ CUDA Device: {}", props.name);
+    CUDA_CHECK(cudaGetDeviceProperties(&props, device_id_));
+    spdlog::info("✅ CUDA Device {}: {}", device_id_, props.name);
 }
 
 void OptixContext::init_optix() {
