@@ -20,10 +20,17 @@ def main():
     # 1. Create simulator and build scene
     print("\n[1] Building scene (slow, one-time operation)...")
     sim = osg.Simulator()
-    config = osg.MeshSceneConfig()
 
     start_build = time.time()
-    sim.build_scene_from_file(str(mesh_path), config)
+    scene = osg.Scene.from_obj(str(mesh_path))
+    print(scene.get_material_names())
+    materials = {
+        "wall_material": osg.material.lambertian(0.99),
+        "detector_material": osg.material.detector(),
+        "sample_material": osg.material.lambertian(80.0)
+    }
+    sim.build_scene(scene, materials)
+
     build_time = time.time() - start_build
     print(f"✅ Scene built in {build_time:.3f}s")
 

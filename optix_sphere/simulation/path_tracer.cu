@@ -1,4 +1,5 @@
 #include "path_tracer.h"
+#include "simulator.h"          // For SimConfig definition
 #include "simulation/device_params.h"
 #include "photon/launchers.h"
 #include <spdlog/spdlog.h>
@@ -8,7 +9,7 @@
 #include <math.h>
 
 
-PathTracer::PathTracer(const OptixContext& context, const Scene& scene, const std::string& ptx_path)
+PathTracer::PathTracer(const OptixContext& context, const DeviceScene& scene, const std::string& ptx_path)
     : context_(context), scene_(scene)
 {
     try {
@@ -19,7 +20,7 @@ PathTracer::PathTracer(const OptixContext& context, const Scene& scene, const st
     }
 }
 
-PathTracer::PathTracer(const OptixContext& context, const Scene& scene, const char* ptx_code, bool is_embedded)
+PathTracer::PathTracer(const OptixContext& context, const DeviceScene& scene, const char* ptx_code, bool is_embedded)
     : context_(context), scene_(scene)
 {
     try {
@@ -56,7 +57,7 @@ SimulationResult PathTracer::launch_from_batch(
     const SimConfig& config,
     const phonder::PhotonBatch& input_batch) // Accepts the new unified PhotonBatch
 {
-    spdlog::info("\n🚀 Launching data-driven simulation from pre-existing batch...");
+    spdlog::info("\n🚀 Launching simulation from pre-existing batch...");
 
     unsigned int photon_count = input_batch.size();
     if (photon_count == 0) {

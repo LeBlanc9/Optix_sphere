@@ -6,7 +6,7 @@
 OptixSBTBuilder::OptixSBTBuilder() {
 }
 
-void OptixSBTBuilder::build_sbt(const OptixPipelineBuilder& pipeline_builder, const Scene& scene) {
+void OptixSBTBuilder::build_sbt(const OptixPipelineBuilder& pipeline_builder, const DeviceScene& scene) {
     create_raygen_record(pipeline_builder.get_program_group("__raygen__data_driven"));
     create_miss_records(pipeline_builder.get_program_group("__miss__radiance"),
                        pipeline_builder.get_program_group("__miss__shadow"));
@@ -17,7 +17,7 @@ void OptixSBTBuilder::build_sbt(const OptixPipelineBuilder& pipeline_builder, co
     spdlog::info("✅ SBT created successfully");
 }
 
-void OptixSBTBuilder::update_materials(const OptixPipelineBuilder& pipeline_builder, const Scene& scene) {
+void OptixSBTBuilder::update_materials(const OptixPipelineBuilder& pipeline_builder, const DeviceScene& scene) {
     spdlog::info("Updating SBT materials (reusing hitgroup records buffer)");
 
     // Simply recreate hitgroup records - this will read updated materials from scene
@@ -64,7 +64,7 @@ void OptixSBTBuilder::create_miss_records(OptixProgramGroup miss_pg, OptixProgra
 
 void OptixSBTBuilder::create_hitgroup_records(
     const OptixPipelineBuilder& pipeline_builder,
-    const Scene& scene)
+    const DeviceScene& scene)
 {
     // Data-driven SBT construction using material polymorphism
     // SBT layout: [mat0_radiance, mat1_radiance, mat2_radiance, mat3_radiance,

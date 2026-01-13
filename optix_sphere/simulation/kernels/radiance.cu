@@ -59,7 +59,7 @@ extern "C" __global__ void __miss__radiance() {
 // ============================================
 
 extern "C" __global__ void __closesthit__lambertian() {
-    const SphereWallSbtData* material = (SphereWallSbtData*)optixGetSbtDataPointer();
+    const LambertianSbtData* material = (LambertianSbtData*)optixGetSbtDataPointer();
     unsigned long long payload_ptr = static_cast<unsigned long long>(optixGetPayload_0()) |
                                      (static_cast<unsigned long long>(optixGetPayload_1()) << 32);
     RayPayload* payload = reinterpret_cast<RayPayload*>(payload_ptr);

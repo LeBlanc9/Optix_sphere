@@ -90,8 +90,6 @@ add_custom_target(embedded_ptx_target ALL
 
 # --------------------------------------------
 # 1. 'photon' Library (Core utilities)
-#    - Photon data structures (SoA)
-#    - GPU-side photon source generators
 # --------------------------------------------
 add_library(photon STATIC
     optix_sphere/photon/photon_batch.cu
@@ -136,12 +134,12 @@ message(STATUS "Library 'media' configured, depends on 'photon'.")
 
 # --------------------------------------------
 # 3. 'sphere' Library (OptiX Integrating Sphere)
-#    - The main path tracing engine
 #    - Depends on the 'photon' library
 # --------------------------------------------
 add_library(sphere STATIC
     optix_sphere/simulation/optix_context.cpp
     optix_sphere/scene/scene.cpp
+    optix_sphere/scene/device_scene.cpp
     optix_sphere/simulation/path_tracer.cu
     optix_sphere/simulation/optix_pipeline_builder.cpp
     optix_sphere/simulation/optix_sbt_builder.cpp
@@ -182,7 +180,13 @@ if (SKBUILD OR BUILD_PYTHON_BINDINGS)
     message(STATUS "Configuring Python bindings...")
     find_package(pybind11 CONFIG REQUIRED)
     pybind11_add_module(_core
-        optix_sphere/python/bindings.cu
+        optix_sphere/bindings/module.cu
+        optix_sphere/bindings/logging_bindings.cu
+        optix_sphere/bindings/types_bindings.cu
+        optix_sphere/bindings/sim_bindings.cu
+        optix_sphere/bindings/photon_bindings.cu
+        optix_sphere/bindings/material_bindings.cu
+        optix_sphere/bindings/media_bindings.cu
     )
     target_link_libraries(_core PRIVATE
         sphere

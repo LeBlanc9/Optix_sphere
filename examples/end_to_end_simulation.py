@@ -61,15 +61,14 @@ def main():
         "detector_material": osg.material.detector(),
         "sample_material": osg.material.lambertian(R_total)  # Sample with reflectance from layered media
     }
-    mesh_config = osg.MeshSceneConfig()
 
 
     simulator = osg.Simulator()
 
     print(f"\n🔨 Building integrating sphere scene...")
     start = time.time()
-
-    simulator.build_scene_from_file(str(mesh_path), materials, mesh_config)
+    scene = osg.Scene.from_obj(str(mesh_path))
+    simulator.build_scene(scene, materials)
     elapsed = time.time() - start
     print(f"✅ Scene built in {elapsed:.3f} seconds")
 

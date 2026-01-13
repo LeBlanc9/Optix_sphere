@@ -40,21 +40,23 @@ int main() {
         Simulator simulator;
 
         // Configure and build the scene from a file
-        fs::path mesh_path = fs::path("E:/workspace/Optix_sphere/assets") / "R_25.4_1mm.obj";
+        fs::path mesh_path = fs::path("/data-pool/zxp/code/Optix_sphere/assets") / "R_25.4_1mm.obj";
 
         // === NEW: Define custom materials using factory functions ===
         const float wall_reflectance = 0.98f;
-        using namespace material;
         std::map<std::string, MaterialFactory> materials;
         // materials["wall_material"] = mixed(0.7f, 0.3f, 0.99f);
-        materials["wall_material"] = lambertian(wall_reflectance);
-        materials["detector_material"] = detector();
+        materials["wall_material"] = material::lambertian(wall_reflectance);
+        materials["detector_material"] = material::detector();
+        materials["sample_material"] = material::lambertian(0.0f);
 
-        MeshSceneConfig scene_config;
-        simulator.build_scene_from_file(mesh_path.string(), materials, scene_config);
+        // Load scene from OBJ file
+        Scene scene = Scene::from_obj(mesh_path.string());
+
+        // Build GPU scene with materials
+        simulator.build_scene(scene, materials);
 
         // --- Theoretical Calculation ---
-        // New object-oriented approach for theoretical sphere
         float sphere_radius_for_theory = 152.4f / 2.0f;
         float wall_reflectance_for_theory = wall_reflectance;
         float incident_power_for_theory = phonder::get_source_power(light_source);

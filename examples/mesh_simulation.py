@@ -19,21 +19,20 @@ def main():
     source.position = osg.float3(0, 0, 0)
     source.weight = 1.0
 
-    mesh_config = osg.MeshSceneConfig()
-
     materials = {}
     # materials["wall_material"] = osg.material.mixed(0.7, 0.3, 0.99)
     materials["wall_material"] = osg.material.lambertian(0.99)
     materials["detector_material"] = osg.material.detector()
 
     # --- Asset Path ---
-    mesh_path = (Path(__file__).parent.parent / "assets/R_25.4_1mm.obj")
+    mesh_path = (Path(__file__).parent.parent / "assets/validations/port_thickness/integrating_sphere_25.4_0.01.obj")
+    scene = osg.Scene.from_obj(str(mesh_path))
         
     # --- Simulation ---
     simulator = osg.Simulator()
 
     start_build = time.time()
-    simulator.build_scene_from_file(str(mesh_path), materials, mesh_config)
+    simulator.build_scene(scene, materials)
     end_build = time.time()
     print(f"   ✅ Scene built in {end_build - start_build:.3f} seconds.")
 
@@ -44,8 +43,8 @@ def main():
 
     # --- Results ---
     print("\n--- Simulation Results ---")
-    print(f"  Detected Flux:   {result.detected_flux:.6f} W")
-    print(f"  Irradiance:      {result.irradiance:.6f} W/mm²")
+    print(f"  Detected Flux:   {result.detected_flux/ result.total_rays:.6f} W")
+    print(f"  Irradiance:      {result.irradiance/ result.total_rays:.6f} W/mm²")
     print(f"  Detected Rays:   {result.detected_rays} / {result.total_rays:,}")
     print(f"  Average Bounces: {result.avg_bounces:.2f}")
 

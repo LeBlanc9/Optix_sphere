@@ -7,11 +7,11 @@
 // ============================================
 
 size_t LambertianMaterial::get_sbt_data_size() const {
-    return sizeof(SphereWallSbtData);
+    return sizeof(LambertianSbtData);
 }
 
 void LambertianMaterial::write_sbt_data(void* dest) const {
-    SphereWallSbtData* data = static_cast<SphereWallSbtData*>(dest);
+    LambertianSbtData* data = static_cast<LambertianSbtData*>(dest);
     data->reflectance = reflectance_;
 }
 
@@ -34,12 +34,12 @@ void DetectorMaterial::write_sbt_data(void* dest) const {
 // ============================================
 
 size_t AbsorberMaterial::get_sbt_data_size() const {
-    return sizeof(PortHoleSbtData);
+    return sizeof(AbsorberSbtData);
 }
 
 void AbsorberMaterial::write_sbt_data(void* dest) const {
-    PortHoleSbtData* data = static_cast<PortHoleSbtData*>(dest);
-    data->dummy = 0;  // Empty struct
+    AbsorberSbtData* data = static_cast<AbsorberSbtData*>(dest);
+    data->dummy = 0;
 }
 
 // ============================================

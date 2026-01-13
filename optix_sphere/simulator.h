@@ -3,7 +3,7 @@
 #include <string>
 #include <memory>
 #include <map>
-#include "scene/scene_types.h" // Contains config structs
+#include "scene/scene.h"   // For Scene
 #include "photon/sources.h"    // Data-only source definitions
 #include "photon/photon_batch.h"      // For PhotonBatch
 #include "photon/launchers.h"  // For generate_photons_on_device in implementation
@@ -12,7 +12,18 @@
 
 
 /**
- * @brief 统一的高级仿真器接口 (API v2).
+ * @brief 仿真运行配置参数
+ */
+struct SimConfig {
+    int num_rays = 1'000'000;   ///< 要追踪的光线数量
+    int max_bounces = 50;       ///< 最大反弹次数
+    bool use_nee = false;       ///< 是否启用Next Event Estimation (默认关闭)
+    unsigned int random_seed = 0; ///< 随机数种子 (0 = 使用时间，非0 = 固定种子)
+};
+
+
+/**
+ * @brief 统一的仿真器接口 (API v2).
  *
  * 封装了OptiX上下文、场景和路径追踪器。
  * 支持从文件加载场景或程序化创建理想场景。
@@ -33,39 +44,31 @@ public:
     // --- Scene Building Methods ---
 
     /**
-     * @brief 从.obj文件构建一个基于网格的场景。
-     * @param file_path .obj文件的路径。
-     * @param config 场景的物理和材质配置。
-     */
-    void build_scene_from_file(const std::string& file_path, const MeshSceneConfig& config);
-
-    /**
-     * @brief 从.obj文件构建一个基于网格的场景，使用自定义材质工厂。
-     * @param file_path .obj文件的路径。
-     * @param material_factories 材质名称到 MaterialFactory 的映射（OBJ 材质名 -> 材质工厂函数）。
-     * @param config 场景的物理配置。
+     * @brief 从Scene构建GPU场景
+     *
+     * 将独立创建的Scene构建为GPU加速结构。
+     *
+     * @param scene CPU端场景数据
+     * @param material_factories 材质名称到 MaterialFactory 的映射
      *
      * @example
      * ```cpp
-     * // 创建自定义材质
-     * using namespace material;
+     * // 创建CPU场景
+     * Scene scene = Scene::from_obj("sphere.obj");
+     *
+     * // 准备材质工厂
      * std::map<std::string, MaterialFactory> materials;
+     * materials["wall"] = material::lambertian(0.98);
+     * materials["detector"] = material::detector();
      *
-     * materials["wall_material"] = mixed(0.7, 0.3, 0.98);
-     * materials["detector_material"] = detector();
-     *
-     * // 对于球面材质，需要指定球心
-     * materials["sphere_wall"] = spherical_mixed(0.7, 0.3, 0.98, make_float3(0, 0, 0));
-     *
-     * // 使用自定义材质构建场景
-     * MeshSceneConfig config;
-     * simulator.build_scene_from_file(mesh_path, materials, config);
+     * // 构建GPU场景
+     * Simulator sim;
+     * sim.build_scene(scene, materials);
      * ```
      */
-    void build_scene_from_file(
-        const std::string& file_path,
-        const std::map<std::string, MaterialFactory>& material_factories,
-        const MeshSceneConfig& config
+    void build_scene(
+        const Scene& scene,
+        const std::map<std::string, MaterialFactory>& material_factories
     );
 
 
@@ -98,9 +101,6 @@ public:
 
     /**
      * @brief 更新单个材质参数（不重建几何结构）
-     *
-     * 快速操作，仅更新材质定义。下次调用 run() 时会自动使用新材质。
-     * 不会重建耗时的 BVH 几何加速结构。
      *
      * @param name 要更新的材质名称（必须在场景中已存在）
      * @param factory MaterialFactory 函数，用于创建新的材质实例

@@ -2,8 +2,7 @@
 
 #include "simulation/optix_context.h"
 #include "utils/device/device_buffer.cuh"
-#include "scene/scene.h"
-#include "scene/scene_types.h"
+#include "scene/device_scene.h"
 #include "simulation_result.h"
 #include "optix_pipeline_builder.h"
 #include "optix_sbt_builder.h"
@@ -11,6 +10,9 @@
 #include "photon/launchers.h"  // C++ API for generate_photons_on_device
 #include "photon/photon_batch.h"      // For PhotonBatch
 #include <memory>
+
+// Forward declaration from simulator.h
+struct SimConfig;
 
 /**
  * @brief Data-driven Monte Carlo path tracer
@@ -21,10 +23,10 @@
 class PathTracer {
 public:
     // 从 PTX 文件构造
-    PathTracer(const OptixContext& context, const Scene& scene, const std::string& ptx_path);
+    PathTracer(const OptixContext& context, const DeviceScene& scene, const std::string& ptx_path);
 
     // 从嵌入的 PTX 字符串构造
-    PathTracer(const OptixContext& context, const Scene& scene, const char* ptx_code, bool is_embedded);
+    PathTracer(const OptixContext& context, const DeviceScene& scene, const char* ptx_code, bool is_embedded);
 
     ~PathTracer();
 
@@ -46,7 +48,7 @@ private:
     void initialize(bool from_file, const std::string& ptx_path_or_code);
 
     const OptixContext& context_;
-    const Scene& scene_;
+    const DeviceScene& scene_;
 
     // 使用 builder 构建 pipeline 和 SBT
     std::unique_ptr<OptixPipelineBuilder> pipeline_builder_;

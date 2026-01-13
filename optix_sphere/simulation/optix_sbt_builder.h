@@ -1,7 +1,7 @@
 #pragma once
 
 #include "utils/device/device_buffer.cuh"
-#include "scene/scene.h"
+#include "scene/device_scene.h"
 #include "optix_pipeline_builder.h"
 #include <optix.h>
 
@@ -20,7 +20,7 @@ public:
      * @param pipeline_builder Pipeline builder（提供 program groups）
      * @param scene Scene（提供几何体数据和材质）
      */
-    void build_sbt(const OptixPipelineBuilder& pipeline_builder, const Scene& scene);
+    void build_sbt(const OptixPipelineBuilder& pipeline_builder, const DeviceScene& scene);
 
     /**
      * @brief 更新 SBT 中的材质数据（不重建整个 SBT）
@@ -31,7 +31,7 @@ public:
      * @param pipeline_builder Pipeline builder（提供 program groups）
      * @param scene Scene with updated materials
      */
-    void update_materials(const OptixPipelineBuilder& pipeline_builder, const Scene& scene);
+    void update_materials(const OptixPipelineBuilder& pipeline_builder, const DeviceScene& scene);
 
     /**
      * @brief 获取构建好的 SBT
@@ -54,7 +54,7 @@ private:
      */
     void create_hitgroup_records(
         const OptixPipelineBuilder& pipeline_builder,
-        const Scene& scene
+        const DeviceScene& scene
     );
 
     OptixShaderBindingTable sbt_ = {};

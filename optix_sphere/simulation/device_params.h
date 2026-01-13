@@ -6,26 +6,21 @@
 // This header defines data structures shared between the host (C++)
 // and the device (CUDA). It should be C-compatible.
 
-// SBT record for sphere primitive
-struct SphereSbtData {
-    float3 center;
-    float radius;
-    float reflectance;
-};
 
-// SBT record for disk primitive (detector)
+// SBT record for disk primitive (used for custom detector geometry)
 struct DiskSbtData {
     float3 center;
     float3 normal;
     float radius;
 };
 
-// Multi-material SBT data structures for triangle meshes
+// ============================================
+// Triangle Mesh Material SBT Structures
+// ============================================
+// These materials use triangle geometric normals
 
-// SBT data for normal sphere wall (high reflectance)
-struct SphereWallSbtData {
-    float reflectance;  // 反射率 (e.g., 0.98)
-    // Note: center removed - now using triangle geometric normals
+struct LambertianSbtData {
+    float reflectance;  // 反射率 (0-1)
 };
 
 // SBT data for detector surface
@@ -36,24 +31,15 @@ struct DetectorSbtData {
     float sensitivity;  // 灵敏度系数 (通常为 1.0)
 };
 
-// SBT data for baffle (low reflectance)
-struct BaffleSbtData {
-    float reflectance;  // 低反射率 (e.g., 0.1-0.3)
-    // Note: center removed - now using triangle geometric normals
-};
-
-// SBT data for port hole (complete absorption)
-struct PortHoleSbtData {
+struct AbsorberSbtData {
     // Empty - absorber doesn't need any parameters
-    int dummy;  // Prevent empty struct
+    int dummy;
 };
 
-// SBT data for mixed material (diffuse + specular)
 struct MixedMaterialSbtData {
     float diffuse_ratio;   // Lambertian 散射比例 (0-1)
     float specular_ratio;  // 镜面反射比例 (0-1)
     float reflectance;     // 总反射率 (0-1)
-    // Note: center removed - now using triangle geometric normals
 };
 
 // ============================================
@@ -63,13 +49,11 @@ struct MixedMaterialSbtData {
 // instead of triangle geometric normals. Faster but only accurate
 // for perfectly spherical surfaces.
 
-// SBT data for spherical Lambertian material
 struct SphericalLambertianSbtData {
     float reflectance;  // 反射率 (e.g., 0.98)
     float3 center;      // 球心（用于计算球面法线）
 };
 
-// SBT data for spherical mixed material
 struct SphericalMixedSbtData {
     float diffuse_ratio;   // Lambertian 散射比例 (0-1)
     float specular_ratio;  // 镜面反射比例 (0-1)

@@ -1,12 +1,13 @@
 #include "simulator.h"
 #include "simulation/optix_context.h"
-#include "scene/scene.h"
+#include "scene/device_scene.h"
 #include "simulation/path_tracer.h" // Now includes launch_from_batch
 #include "embedded_ptx.h"
 #include "photon/launchers.h" // For phonder::generate_photons_on_device
 #include "geometry/mesh_loader.h" // For MeshLoader::get_default_material_configs
 #include <spdlog/spdlog.h>
 #include <stdexcept>
+#include <string>
 
 // =================================================================
 // PIMPL (Pointer to Implementation) Idiom
@@ -19,7 +20,7 @@ public:
     explicit Pimpl(int device_id) : context_(device_id) {}
 
     OptixContext context_;
-    std::unique_ptr<Scene> scene_;
+    std::unique_ptr<DeviceScene> scene_;
     std::unique_ptr<PathTracer> tracer_;
 
     // A flag to check if a scene has been successfully built.
@@ -48,31 +49,31 @@ Simulator::Simulator(int device_id) : pimpl_(std::make_unique<Pimpl>(device_id))
 
 Simulator::~Simulator() = default; // Default destructor is fine with unique_ptr<Pimpl>
 
-void Simulator::build_scene_from_file(const std::string& file_path, const MeshSceneConfig& config) {
-    // Use default material factories
-    spdlog::warn("⚠️  Using default material mapping. Consider specifying custom materials for better control.");
-    auto material_factories = MeshLoader::get_default_materials();
-    build_scene_from_file(file_path, material_factories, config);
-}
-
-void Simulator::build_scene_from_file(
-    const std::string& file_path,
-    const std::map<std::string, MaterialFactory>& material_factories,
-    const MeshSceneConfig& config
+void Simulator::build_scene(
+    const Scene& scene,
+    const std::map<std::string, MaterialFactory>& material_factories
 ) {
-    spdlog::info("Attempting to build scene from file: {}", file_path);
+    spdlog::info("Building GPU scene from Scene...");
 
-    // Create the scene object.
-    pimpl_->scene_ = std::make_unique<Scene>(pimpl_->context_);
+    // Create the DeviceScene object
+    pimpl_->scene_ = std::make_unique<DeviceScene>(pimpl_->context_);
 
-    // Build the scene from the mesh file with custom material factories.
-    // Material properties (including sphere center for spherical materials) are
-    // already captured in the MaterialFactory closures.
-    // Note: config is kept for API compatibility but currently unused.
-    pimpl_->scene_->build_scene(file_path, material_factories);
-    spdlog::info("✅ Scene built successfully from file.");
+    // Get mesh data
+    const Mesh& mesh = scene.get_mesh();
 
-    // Now that the scene exists, create the path tracer.
+    // Validate that all materials have factories
+    for (const auto& name : mesh.material_names) {
+        auto it = material_factories.find(name);
+        if (it == material_factories.end()) {
+            throw std::runtime_error("Material factory not provided for material: " + name);
+        }
+    }
+
+    // Build GPU scene with mesh and material factories
+    pimpl_->scene_->build(mesh, material_factories);
+    spdlog::info("✅ GPU scene built successfully.");
+
+    // Create the path tracer
     pimpl_->create_tracer();
 }
 
