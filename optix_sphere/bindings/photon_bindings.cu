@@ -4,6 +4,7 @@
 #include "photon/sources.h"
 #include "photon/photon_batch.h"
 #include "photon/photon_transform.cuh"
+#include "photon/launchers.h"
 
 namespace py = pybind11;
 using namespace phonder;

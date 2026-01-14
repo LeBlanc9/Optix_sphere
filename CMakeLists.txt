@@ -29,6 +29,8 @@ set(CMAKE_CUDA_RUNTIME_LIBRARY Shared)
 
 # Suppress NVCC warnings and enable relaxed constexpr for Thrust compatibility
 add_compile_options($<$<COMPILE_LANGUAGE:CUDA>:-diag-suppress=27>)
+add_compile_options($<$<COMPILE_LANGUAGE:CUDA>:-diag-suppress=128>)  # Suppress "loop is not reachable"
+add_compile_options($<$<COMPILE_LANGUAGE:CUDA>:-diag-suppress=2417>) # Suppress "constexpr constructor calls non-constexpr function"
 add_compile_options($<$<COMPILE_LANGUAGE:CUDA>:--expt-relaxed-constexpr>)
 
 include(cmake/dependencies.cmake)
@@ -36,6 +38,9 @@ include(cmake/dependencies.cmake)
 include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/optix_sphere
 )
+
+# Optionally build Python bindings outside of scikit-build
+option(BUILD_PYTHON_BINDINGS "Build Python bindings" OFF)
 
 # Extract first detected GPU architecture for PTX compilation
 list(GET CMAKE_CUDA_ARCHITECTURES 0 PTX_ARCH)
@@ -174,43 +179,8 @@ target_compile_definitions(sphere PRIVATE FMT_UNICODE=0)
 # Final Target Linking
 # ============================================
 
-option(BUILD_PYTHON_BINDINGS "Build Python bindings via pybind11" OFF)
 if (SKBUILD OR BUILD_PYTHON_BINDINGS)
-    # Python Bindings
-    message(STATUS "Configuring Python bindings...")
-    find_package(pybind11 CONFIG REQUIRED)
-    pybind11_add_module(_core
-        optix_sphere/bindings/module.cu
-        optix_sphere/bindings/logging_bindings.cu
-        optix_sphere/bindings/types_bindings.cu
-        optix_sphere/bindings/sim_bindings.cu
-        optix_sphere/bindings/photon_bindings.cu
-        optix_sphere/bindings/material_bindings.cu
-        optix_sphere/bindings/media_bindings.cu
-    )
-    target_link_libraries(_core PRIVATE
-        sphere
-        media
-    )
-    target_compile_definitions(_core PRIVATE FMT_UNICODE=0)
-    if (SKBUILD)
-        install(TARGETS _core LIBRARY DESTINATION ${SKBUILD_PLATLIB_DIR}/optix_sphere)
-
-        # --- Bundle dependent DLLs ---
-        # Find and install the CUDA runtime DLL next to the _core.pyd module.
-        # This makes the wheel self-contained and avoids DLL load errors on Windows.
-        if(WIN32)
-            message(STATUS "Searching for CUDA runtime DLL to bundle in wheel...")
-            # CUDAToolkit_BIN_DIR is provided by find_package(CUDAToolkit)
-            file(GLOB CUDA_RUNTIME_DLL "${CUDAToolkit_BIN_DIR}/cudart64_*.dll")
-            if(CUDA_RUNTIME_DLL)
-                message(STATUS "  -> Found and bundling: ${CUDA_RUNTIME_DLL}")
-                install(FILES ${CUDA_RUNTIME_DLL} DESTINATION ${SKBUILD_PLATLIB_DIR}/optix_sphere)
-            else()
-                message(WARNING "Could not find CUDA runtime DLL to bundle. The installed wheel may require CUDA runtime to be in the system PATH.")
-            endif()
-        endif()
-    endif()
+    add_subdirectory(optix_sphere/bindings)
 else()
     # Test Executables
     message(STATUS "Configuring Test executables...")

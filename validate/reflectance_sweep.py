@@ -26,7 +26,8 @@ def run_simulation(simulator, reflectance, sim_config, source, mesh_path):
         "detector_material": osg.material.detector()
     }
 
-    simulator.build_scene_from_file(mesh_path, materials, mesh_config)
+    # scene = osg.Scene::from_obj(mesh_path)
+    # simulator.build_scene_from_file(mesh_path, materials, mesh_config)
 
     sim_config.use_nee = True
     result = simulator.run(source, sim_config)

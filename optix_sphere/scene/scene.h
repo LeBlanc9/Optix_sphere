@@ -32,7 +32,7 @@ public:
      * Scene scene = Scene::from_mesh(std::move(procedural_mesh));
      * ```
      */
-    static Scene from_mesh(Mesh&& mesh) {
+    static Scene from_mesh(Mesh mesh) {
         return Scene(std::move(mesh));
     }
 

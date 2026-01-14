@@ -6,6 +6,7 @@
 #include "photon/photon_batch.h"
 
 namespace py = pybind11;
+using namespace phonder;
 
 void bind_media(py::module_ &m) {
     py::module_ media_module = m.def_submodule("media", "Layered media simulation functions");
