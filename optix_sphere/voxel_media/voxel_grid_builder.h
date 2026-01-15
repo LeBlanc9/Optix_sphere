@@ -1,98 +1,83 @@
 #pragma once
-#include "voxel_grid.cuh"
 #include <vector>
-#include <memory>
-#include <cuda_runtime.h>
+#include <stdexcept>
 
 namespace phonder::voxel {
 
 /**
- * @brief Host-side builder for Grid (MCX-style with material table)
+ * @brief Lightweight utility to build material ID grids
  *
- * This class manages memory allocation and provides convenient methods
- * to construct voxel grids using material IDs and a lookup table.
+ * This class ONLY constructs the grid of material IDs (labels).
+ * It does NOT manage material properties - those are handled separately
+ * in SimConfig.
  *
  * Usage:
- *   GridBuilder builder(nx, ny, nz, dx, dy, dz);
- *   int skin_id = builder.add_material(1.42, 0.01, 20.0, 0.7);
- *   int muscle_id = builder.add_material(1.42, 0.3, 80.0, 0.7);
- *   builder.fill_region(0, 100, 0, 100, 0, 1, skin_id);
- *   builder.fill_region(0, 100, 0, 100, 1, 3, muscle_id);
+ *   GridBuilder builder(nx, ny, nz);
+ *   builder.set_voxel(x, y, z, material_id);
+ *   builder.fill_region(x0, x1, y0, y1, z0, z1, material_id);
+ *
+ *   // Then pass to SimConfig
+ *   SimConfig config;
+ *   config.set_grid(builder.get_grid(), nx, ny, nz, dx, dy, dz);
  */
 class GridBuilder {
 public:
-    GridBuilder(int nx, int ny, int nz, float dx, float dy, float dz, float ambient_n = 1.0f);
-    ~GridBuilder();
-
-    // Disable copy, enable move
-    GridBuilder(const GridBuilder&) = delete;
-    GridBuilder& operator=(const GridBuilder&) = delete;
-    GridBuilder(GridBuilder&&) = default;
-    GridBuilder& operator=(GridBuilder&&) = default;
-
     /**
-     * @brief Add a material type and return its ID
-     * @return Material ID (0-255)
+     * @brief Constructor
+     * @param nx, ny, nz Grid dimensions
      */
-    int add_material(float n, float mua, float mus, float g);
+    GridBuilder(int nx, int ny, int nz);
 
     /**
      * @brief Set material ID for a single voxel
+     * @param x, y, z Voxel coordinates
+     * @param material_id Material ID (0-255)
      */
     void set_voxel(int x, int y, int z, int material_id);
 
     /**
      * @brief Fill all voxels with a material ID
+     * @param material_id Material ID to fill
      */
     void fill_uniform(int material_id);
 
     /**
      * @brief Fill a rectangular region with a material ID
+     * @param x0, x1 X range [x0, x1) (exclusive end)
+     * @param y0, y1 Y range [y0, y1)
+     * @param z0, z1 Z range [z0, z1)
+     * @param material_id Material ID to fill
      */
     void fill_region(int x0, int x1, int y0, int y1, int z0, int z1, int material_id);
 
     /**
-     * @brief Get the device pointer to the Grid structure
-     * This uploads the data to GPU if needed
+     * @brief Fill a sphere with a material ID
+     * @param cx, cy, cz Sphere center (in voxel indices)
+     * @param radius Sphere radius (in voxels)
+     * @param material_id Material ID to fill
      */
-    Grid* get_device_grid();
+    void fill_sphere(int cx, int cy, int cz, float radius, int material_id);
 
     /**
-     * @brief Get the host-side Grid structure (for inspection)
+     * @brief Fill a cylinder along Z axis
+     * @param cx, cy Center (in voxel indices)
+     * @param radius Cylinder radius (in voxels)
+     * @param z0, z1 Z range
+     * @param material_id Material ID to fill
      */
-    const Grid& get_host_grid() const { return host_grid_; }
+    void fill_cylinder_z(int cx, int cy, float radius, int z0, int z1, int material_id);
 
     // Getters
+    const unsigned char* get_grid() const { return grid_.data(); }
     int get_nx() const { return nx_; }
     int get_ny() const { return ny_; }
     int get_nz() const { return nz_; }
-    float get_dx() const { return dx_; }
-    float get_dy() const { return dy_; }
-    float get_dz() const { return dz_; }
 
 private:
     int nx_, ny_, nz_;
-    float dx_, dy_, dz_;
-    float ambient_n_;
-    int total_voxels_;
+    std::vector<unsigned char> grid_;  // Material IDs only
 
-    // Host-side storage
-    std::vector<unsigned char> host_material_ids_;  // Material ID for each voxel
-    std::vector<float4> host_material_table_;       // Material properties lookup table
-
-    // Host-side Grid structure
-    Grid host_grid_;
-
-    // Device-side storage
-    unsigned char* device_material_ids_ = nullptr;
-    float4* device_material_table_ = nullptr;
-    Grid* device_grid_ = nullptr;
-
-    bool device_dirty_ = true; // Whether device data needs update
-
-    void upload_to_device();
-    void free_device_memory();
     int get_index(int x, int y, int z) const;
 };
 
-}; // namespace phonder::voxel
+} // namespace phonder::voxel

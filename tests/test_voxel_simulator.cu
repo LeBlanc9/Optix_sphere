@@ -1,8 +1,10 @@
 #include <iostream>
 #include <cmath>
 #include <chrono>
+#include <vector>
 #include "voxel_media/voxel_simulator.h"
 #include "voxel_media/voxel_grid_builder.h"
+#include "voxel_media/voxel_sim_config.h"
 #include "layered_media/media_simulator.cuh"
 #include "photon/sources.h"
 
@@ -65,32 +67,46 @@ void test_comparison_with_layered_medium() {
     // === Method 2: VoxelGrid ===
     std::cout << "=== VoxelGrid (Our Implementation) - 3 Layers ===" << std::endl;
 
-    // Create voxel grid matching the 3-layer structure
-    // 100x100 in XY, 3 voxels in Z (each 1mm thick)
-    GridBuilder voxel_builder(100, 100, 3, 1.0f, 1.0f, 1.0f, 1.0f);
+    // Step 1: Create voxel grid using GridBuilder (only material IDs)
+    GridBuilder voxel_builder(100, 100, 3);
 
-    // Define material types
-    int layer1_mat = voxel_builder.add_material(1.42f, 0.01f, 20.0f, 0.7f);  // Layer 1
-    int layer2_mat = voxel_builder.add_material(1.00f, 0.1f,  90.0f, 0.7f);  // Layer 2
-    int layer3_mat = voxel_builder.add_material(1.42f, 0.3f,  80.0f, 0.7f);  // Layer 3
+    // Fill each layer with material IDs (1, 2, 3)
+    voxel_builder.fill_region(0, 100, 0, 100, 0, 1, 1);  // Layer 1 -> material ID 1
+    voxel_builder.fill_region(0, 100, 0, 100, 1, 2, 2);  // Layer 2 -> material ID 2
+    voxel_builder.fill_region(0, 100, 0, 100, 2, 3, 3);  // Layer 3 -> material ID 3
 
-    // Fill each layer with corresponding material IDs
-    voxel_builder.fill_region(0, 100, 0, 100, 0, 1, layer1_mat);
-    voxel_builder.fill_region(0, 100, 0, 100, 1, 2, layer2_mat);
-    voxel_builder.fill_region(0, 100, 0, 100, 2, 3, layer3_mat);
+    // Step 2: Define materials separately (n, mua, mus, g for each material)
+    std::vector<float> materials = {
+        1.0f,  0.0f,   1e-6f, 0.0f,   // Material 0 (ambient/default)
+        1.42f, 0.01f,  20.0f, 0.7f,   // Material 1
+        1.00f, 0.1f,   90.0f, 0.7f,   // Material 2
+        1.42f, 0.3f,   80.0f, 0.7f    // Material 3
+    };
 
-    std::cout << "  Created 100x100x3 voxel grid with 3 material types" << std::endl;
+    std::cout << "  Created 100x100x3 voxel grid with 4 material types" << std::endl;
+    std::cout << "  Material 0: n=1.00, mua=0.0,  mus=1e-6, g=0.0 (ambient)" << std::endl;
     std::cout << "  Material 1: n=1.42, mua=0.01, mus=20.0, g=0.7" << std::endl;
     std::cout << "  Material 2: n=1.00, mua=0.1,  mus=90.0, g=0.7" << std::endl;
     std::cout << "  Material 3: n=1.42, mua=0.3,  mus=80.0, g=0.7" << std::endl;
 
-    // Source for VoxelGrid (positioned at voxel center: 50mm, 50mm)
+    // Step 3: Source for VoxelGrid (positioned at voxel center: 50mm, 50mm)
     CollimatedBeamSource voxel_source;
     voxel_source.position = make_float3(50.0f, 50.0f, -0.1f);
     voxel_source.direction = make_float3(0.0f, 0.0f, 1.0f);
     voxel_source.weight = 1.0;
 
-    Simulator voxel_sim(voxel_builder, voxel_source);
+    // Step 4: Create SimConfig
+    SimConfig voxel_config;
+    voxel_config.set_grid(voxel_builder.get_grid(),
+                          voxel_builder.get_nx(),
+                          voxel_builder.get_ny(),
+                          voxel_builder.get_nz());  // Default: 1x1x1 mm
+    voxel_config.set_materials(materials.data(), materials.size() / 4);
+    voxel_config.set_source(voxel_source);
+    voxel_config.set_exit_boundaries(0.0f, 3.0f);  // Exit at z=0 and z=3mm
+
+    // Step 5: Create simulator
+    Simulator voxel_sim(voxel_config);
 
     auto start_voxel = std::chrono::high_resolution_clock::now();
     auto voxel_result = voxel_sim.run(num_photons);

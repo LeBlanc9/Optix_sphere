@@ -5,6 +5,13 @@
 
 namespace phonder::voxel {
 
+// Constant memory for material properties (MCX-style)
+// Maximum 256 materials (matching uint8 material ID range)
+constexpr int MAX_MATERIALS = 256;
+
+// External declaration (defined in voxel_sim_runner.cu)
+extern __constant__ float4 c_materials[MAX_MATERIALS];
+
 /**
  * @brief Optical properties for a single voxel
  */
@@ -30,33 +37,31 @@ struct OpticalProperties {
  *
  * This structure stores optical properties using a two-level approach:
  * 1. Each voxel stores a material ID (uint8_t, 0-255)
- * 2. A material table maps IDs to optical properties (float4)
+ * 2. Material properties stored in constant memory (c_materials)
  *
  * Benefits:
  * - Memory efficient: 1 byte per voxel instead of 16 bytes
- * - Fast property lookup: single float4 read from material table
+ * - Fast property lookup: constant memory cached, broadcast to warp
  * - Easy material management: change material properties globally
  */
 struct Grid {
-    // Grid dimensions
-    int nx, ny, nz;           // number of voxels in each dimension
-    float dx, dy, dz;         // voxel size in mm
+    // Grid dimensions and voxel size
+    int3 dims;                // number of voxels (nx, ny, nz)
+    float3 voxel_size;        // voxel size in mm (dx, dy, dz)
 
     // Material ID for each voxel (0-255)
     unsigned char* material_ids;  // 1D array: material_ids[x*ny*nz + y*nz + z]
 
-    // Material properties lookup table (packed as float4)
-    // Each float4 contains: {n, mua, mus, g}
-    float4* material_table;
-    int num_materials;        // number of materials in the table
+    // Number of materials (properties stored in c_materials constant memory)
+    int num_materials;
 
     // Ambient (outside) refractive index
     float ambient_n;
 
     __host__ __device__ Grid()
-        : nx(0), ny(0), nz(0),
-          dx(0.0f), dy(0.0f), dz(0.0f),
-          material_ids(nullptr), material_table(nullptr),
+        : dims(make_int3(0, 0, 0)),
+          voxel_size(make_float3(0.0f, 0.0f, 0.0f)),
+          material_ids(nullptr),
           num_materials(0), ambient_n(1.0f) {}
 
     /**
@@ -66,9 +71,9 @@ struct Grid {
      */
     __host__ __device__ int3 world_to_voxel(const float3& pos) const {
         return make_int3(
-            static_cast<int>(floorf(pos.x / dx)),
-            static_cast<int>(floorf(pos.y / dy)),
-            static_cast<int>(floorf(pos.z / dz))
+            static_cast<int>(floorf(pos.x / voxel_size.x)),
+            static_cast<int>(floorf(pos.y / voxel_size.y)),
+            static_cast<int>(floorf(pos.z / voxel_size.z))
         );
     }
 
@@ -78,26 +83,27 @@ struct Grid {
      * @return 1D array index
      */
     __host__ __device__ int voxel_to_index(const int3& voxel_idx) const {
-        return voxel_idx.x * (ny * nz) + voxel_idx.y * nz + voxel_idx.z;
+        return voxel_idx.x * (dims.y * dims.z) + voxel_idx.y * dims.z + voxel_idx.z;
     }
 
     /**
      * @brief Check if voxel indices are within bounds
      */
     __host__ __device__ bool is_inside(const int3& voxel_idx) const {
-        return voxel_idx.x >= 0 && voxel_idx.x < nx &&
-               voxel_idx.y >= 0 && voxel_idx.y < ny &&
-               voxel_idx.z >= 0 && voxel_idx.z < nz;
+        return voxel_idx.x >= 0 && voxel_idx.x < dims.x &&
+               voxel_idx.y >= 0 && voxel_idx.y < dims.y &&
+               voxel_idx.z >= 0 && voxel_idx.z < dims.z;
     }
 
     /**
      * @brief Get optical properties at a voxel index (no bounds checking!)
      *
-     * Fast path: single material table lookup using float4
+     * Fast path: reads from constant memory c_materials
+     * Constant memory is cached and broadcasts to all threads in a warp
      */
     __device__ OpticalProperties get_properties_at_index(int idx) const {
         unsigned char material_id = material_ids[idx];
-        float4 props = material_table[material_id];
+        float4 props = c_materials[material_id];
         return OpticalProperties(props.x, props.y, props.z, props.w);
     }
 
@@ -119,9 +125,9 @@ struct Grid {
      */
     __host__ __device__ float3 voxel_center(const int3& voxel_idx) const {
         return make_float3(
-            (voxel_idx.x + 0.5f) * dx,
-            (voxel_idx.y + 0.5f) * dy,
-            (voxel_idx.z + 0.5f) * dz
+            (voxel_idx.x + 0.5f) * voxel_size.x,
+            (voxel_idx.y + 0.5f) * voxel_size.y,
+            (voxel_idx.z + 0.5f) * voxel_size.z
         );
     }
 };

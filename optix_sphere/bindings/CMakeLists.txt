@@ -13,11 +13,13 @@ pybind11_add_module(_core
     photon_bindings.cu
     material_bindings.cu
     media_bindings.cu
+    voxel_bindings.cu
 )
 
 target_link_libraries(_core PRIVATE
     sphere
     media
+    voxel_media
 )
 
 target_compile_definitions(_core PRIVATE FMT_UNICODE=0)

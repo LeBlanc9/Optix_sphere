@@ -1,43 +1,18 @@
 #include "voxel_grid_builder.h"
-#include <stdexcept>
-#include <cstring>
 #include <algorithm>
+#include <cmath>
 
 namespace phonder::voxel {
 
-GridBuilder::GridBuilder(int nx, int ny, int nz, float dx, float dy, float dz, float ambient_n)
-    : nx_(nx), ny_(ny), nz_(nz), dx_(dx), dy_(dy), dz_(dz), ambient_n_(ambient_n)
+GridBuilder::GridBuilder(int nx, int ny, int nz)
+    : nx_(nx), ny_(ny), nz_(nz)
 {
     if (nx <= 0 || ny <= 0 || nz <= 0) {
         throw std::invalid_argument("Grid dimensions must be positive");
     }
-    if (dx <= 0.0f || dy <= 0.0f || dz <= 0.0f) {
-        throw std::invalid_argument("Voxel sizes must be positive");
-    }
 
-    total_voxels_ = nx * ny * nz;
-
-    // Allocate host memory - initialize all voxels to material ID 0
-    host_material_ids_.resize(total_voxels_, 0);
-
-    // Add default material 0 (ambient/air-like: no absorption, minimal scattering)
-    host_material_table_.push_back(make_float4(1.0f, 0.0f, 1e-6f, 0.0f));
-
-    // Initialize host grid structure
-    host_grid_.nx = nx;
-    host_grid_.ny = ny;
-    host_grid_.nz = nz;
-    host_grid_.dx = dx;
-    host_grid_.dy = dy;
-    host_grid_.dz = dz;
-    host_grid_.ambient_n = ambient_n;
-    host_grid_.material_ids = host_material_ids_.data();
-    host_grid_.material_table = host_material_table_.data();
-    host_grid_.num_materials = 1;
-}
-
-GridBuilder::~GridBuilder() {
-    free_device_memory();
+    // Allocate grid - initialize all to material 0
+    grid_.resize(nx * ny * nz, 0);
 }
 
 int GridBuilder::get_index(int x, int y, int z) const {
@@ -47,43 +22,24 @@ int GridBuilder::get_index(int x, int y, int z) const {
     return x * (ny_ * nz_) + y * nz_ + z;
 }
 
-int GridBuilder::add_material(float n, float mua, float mus, float g) {
-    if (host_material_table_.size() >= 256) {
-        throw std::runtime_error("Maximum number of materials (256) exceeded");
-    }
-
-    int material_id = static_cast<int>(host_material_table_.size());
-    host_material_table_.push_back(make_float4(n, mua, mus, g));
-
-    // Update host grid
-    host_grid_.material_table = host_material_table_.data();
-    host_grid_.num_materials = static_cast<int>(host_material_table_.size());
-
-    device_dirty_ = true;
-    return material_id;
-}
-
 void GridBuilder::set_voxel(int x, int y, int z, int material_id) {
-    if (material_id < 0 || material_id >= static_cast<int>(host_material_table_.size())) {
-        throw std::out_of_range("Material ID out of range");
+    if (material_id < 0 || material_id > 255) {
+        throw std::out_of_range("Material ID must be 0-255");
     }
     int idx = get_index(x, y, z);
-    host_material_ids_[idx] = static_cast<unsigned char>(material_id);
-    device_dirty_ = true;
+    grid_[idx] = static_cast<unsigned char>(material_id);
 }
 
 void GridBuilder::fill_uniform(int material_id) {
-    if (material_id < 0 || material_id >= static_cast<int>(host_material_table_.size())) {
-        throw std::out_of_range("Material ID out of range");
+    if (material_id < 0 || material_id > 255) {
+        throw std::out_of_range("Material ID must be 0-255");
     }
-    std::fill(host_material_ids_.begin(), host_material_ids_.end(),
-              static_cast<unsigned char>(material_id));
-    device_dirty_ = true;
+    std::fill(grid_.begin(), grid_.end(), static_cast<unsigned char>(material_id));
 }
 
 void GridBuilder::fill_region(int x0, int x1, int y0, int y1, int z0, int z1, int material_id) {
-    if (material_id < 0 || material_id >= static_cast<int>(host_material_table_.size())) {
-        throw std::out_of_range("Material ID out of range");
+    if (material_id < 0 || material_id > 255) {
+        throw std::out_of_range("Material ID must be 0-255");
     }
 
     // Clamp to valid range
@@ -99,66 +55,73 @@ void GridBuilder::fill_region(int x0, int x1, int y0, int y1, int z0, int z1, in
         for (int y = y0; y < y1; ++y) {
             for (int z = z0; z < z1; ++z) {
                 int idx = get_index(x, y, z);
-                host_material_ids_[idx] = mid;
+                grid_[idx] = mid;
             }
         }
     }
-    device_dirty_ = true;
 }
 
-void GridBuilder::upload_to_device() {
-    size_t material_ids_bytes = total_voxels_ * sizeof(unsigned char);
-    size_t material_table_bytes = host_material_table_.size() * sizeof(float4);
-
-    // Allocate device arrays if not already allocated
-    if (!device_material_ids_) {
-        cudaMalloc(&device_material_ids_, material_ids_bytes);
-        cudaMalloc(&device_material_table_, material_table_bytes);
-        cudaMalloc(&device_grid_, sizeof(Grid));
-    } else {
-        // Reallocate material table if size changed
-        cudaFree(device_material_table_);
-        cudaMalloc(&device_material_table_, material_table_bytes);
+void GridBuilder::fill_sphere(int cx, int cy, int cz, float radius, int material_id) {
+    if (material_id < 0 || material_id > 255) {
+        throw std::out_of_range("Material ID must be 0-255");
     }
 
-    // Copy data to device
-    cudaMemcpy(device_material_ids_, host_material_ids_.data(),
-               material_ids_bytes, cudaMemcpyHostToDevice);
-    cudaMemcpy(device_material_table_, host_material_table_.data(),
-               material_table_bytes, cudaMemcpyHostToDevice);
+    unsigned char mid = static_cast<unsigned char>(material_id);
+    float r2 = radius * radius;
 
-    // Create device Grid structure
-    Grid device_grid_host = host_grid_;
-    device_grid_host.material_ids = device_material_ids_;
-    device_grid_host.material_table = device_material_table_;
-    device_grid_host.num_materials = static_cast<int>(host_material_table_.size());
+    // Bounding box
+    int x0 = std::max(0, static_cast<int>(std::floor(cx - radius)));
+    int x1 = std::min(nx_, static_cast<int>(std::ceil(cx + radius)) + 1);
+    int y0 = std::max(0, static_cast<int>(std::floor(cy - radius)));
+    int y1 = std::min(ny_, static_cast<int>(std::ceil(cy + radius)) + 1);
+    int z0 = std::max(0, static_cast<int>(std::floor(cz - radius)));
+    int z1 = std::min(nz_, static_cast<int>(std::ceil(cz + radius)) + 1);
 
-    cudaMemcpy(device_grid_, &device_grid_host, sizeof(Grid), cudaMemcpyHostToDevice);
+    for (int x = x0; x < x1; ++x) {
+        for (int y = y0; y < y1; ++y) {
+            for (int z = z0; z < z1; ++z) {
+                float dx = x - cx;
+                float dy = y - cy;
+                float dz = z - cz;
+                if (dx*dx + dy*dy + dz*dz <= r2) {
+                    int idx = get_index(x, y, z);
+                    grid_[idx] = mid;
+                }
+            }
+        }
+    }
+}
 
-    // Check for errors
-    cudaError_t err = cudaGetLastError();
-    if (err != cudaSuccess) {
-        throw std::runtime_error(std::string("CUDA error in upload_to_device: ") + cudaGetErrorString(err));
+void GridBuilder::fill_cylinder_z(int cx, int cy, float radius, int z0, int z1, int material_id) {
+    if (material_id < 0 || material_id > 255) {
+        throw std::out_of_range("Material ID must be 0-255");
     }
 
-    device_dirty_ = false;
-}
+    unsigned char mid = static_cast<unsigned char>(material_id);
+    float r2 = radius * radius;
 
-void GridBuilder::free_device_memory() {
-    if (device_material_ids_) cudaFree(device_material_ids_);
-    if (device_material_table_) cudaFree(device_material_table_);
-    if (device_grid_) cudaFree(device_grid_);
+    // Clamp z range
+    z0 = std::max(0, z0);
+    z1 = std::min(nz_, z1);
 
-    device_material_ids_ = nullptr;
-    device_material_table_ = nullptr;
-    device_grid_ = nullptr;
-}
+    // Bounding box in XY
+    int x0 = std::max(0, static_cast<int>(std::floor(cx - radius)));
+    int x1 = std::min(nx_, static_cast<int>(std::ceil(cx + radius)) + 1);
+    int y0 = std::max(0, static_cast<int>(std::floor(cy - radius)));
+    int y1 = std::min(ny_, static_cast<int>(std::ceil(cy + radius)) + 1);
 
-Grid* GridBuilder::get_device_grid() {
-    if (device_dirty_) {
-        upload_to_device();
+    for (int x = x0; x < x1; ++x) {
+        for (int y = y0; y < y1; ++y) {
+            float dx = x - cx;
+            float dy = y - cy;
+            if (dx*dx + dy*dy <= r2) {
+                for (int z = z0; z < z1; ++z) {
+                    int idx = get_index(x, y, z);
+                    grid_[idx] = mid;
+                }
+            }
+        }
     }
-    return device_grid_;
 }
 
-}; // namespace phonder::voxel
+} // namespace phonder::voxel

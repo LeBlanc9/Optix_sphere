@@ -121,7 +121,7 @@ __device__ inline float hg_sample_costheta(float g, float rand) {
  * @param g Anisotropy factor
  * @param state Random number generator state
  */
-__device__ inline void scatter(float3* v, float g, curandState* state) {
+__device__ __forceinline__ void scatter(float3* v, float g, curandState* state) {
     float costheta = hg_sample_costheta(g, curand_uniform(state));
     float sintheta = sqrtf(1.f - costheta * costheta);
 
@@ -151,7 +151,7 @@ __device__ inline float sample_scatter_length(curandState* state) {
  * @param voxel_state Voxel indices [0-2] and hit face [3]
  * @param inv_dir Inverse direction (updated)
  */
-__device__ inline void reflect_at_interface(float3* dir, short voxel_state[4], float3* inv_dir) {
+__device__ __forceinline__ void reflect_at_interface(float3* dir, short voxel_state[4], float3* inv_dir) {
     // Reverse direction component perpendicular to the interface
     // and update voxel index to go back to previous voxel
     if (voxel_state[3] == 0) {

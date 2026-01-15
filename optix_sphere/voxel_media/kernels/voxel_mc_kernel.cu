@@ -122,7 +122,9 @@ __global__ void mc_kernel(
 
         // Move photon to grid entrance if starting outside (MCX skipvoid style)
         float3 grid_min = make_float3(0.f, 0.f, exit_z_min);
-        float3 grid_max = make_float3(grid->dx * grid->nx, grid->dy * grid->ny, exit_z_max);
+        float3 grid_max = make_float3(grid->voxel_size.x * grid->dims.x,
+                                       grid->voxel_size.y * grid->dims.y,
+                                       exit_z_max);
 
         bool outside = (pos.x < grid_min.x || pos.x >= grid_max.x ||
                         pos.y < grid_min.y || pos.y >= grid_max.y ||
@@ -168,9 +170,9 @@ __global__ void mc_kernel(
 
         // Convert position to voxel coordinates (MCX works in voxel units)
         float3 pos_voxel = make_float3(
-            pos.x / grid->dx,
-            pos.y / grid->dy,
-            pos.z / grid->dz
+            pos.x / grid->voxel_size.x,
+            pos.y / grid->voxel_size.y,
+            pos.z / grid->voxel_size.z
         );
 
         // Small epsilon push to avoid being exactly on a voxel boundary
@@ -209,13 +211,14 @@ __global__ void mc_kernel(
         // Number of scattering events (skip direction change on first iteration)
         int scatter_count = 0;
 
-        // Get initial voxel properties (will be updated in loop)
-        voxel_idx = make_int3(voxel_state[0], voxel_state[1], voxel_state[2]);
-        OpticalProperties optical_props = grid->get_properties(voxel_idx);
+        // Precompute minimum voxel size (used for physical distance calculations)
+        const float voxel_size_mm = fminf(grid->voxel_size.x,
+                                          fminf(grid->voxel_size.y, grid->voxel_size.z));
 
         // Main transport loop
         int iter = 0;
         bool exited = false;
+        OpticalProperties optical_props;  // Will be set in first iteration
 
         while (!exited && weight > WEIGHT_THRESHOLD && iter < MAX_ITER) {
             iter++;
@@ -241,7 +244,6 @@ __global__ void mc_kernel(
             float dist_to_boundary = hitgrid(&pos_voxel, &dir, (float*)&inv_dir, voxel_state);
 
             // Convert to physical units for scattering calculation
-            float voxel_size_mm = fminf(grid->dx, fminf(grid->dy, grid->dz));
             float scatter_len_to_boundary = dist_to_boundary * voxel_size_mm * optical_props.mus;
 
             // Determine if photon scatters or crosses boundary
@@ -268,7 +270,7 @@ __global__ void mc_kernel(
             }
 
             // Apply absorption (Beer-Lambert law)
-            float travel_dist_mm = travel_dist * fminf(grid->dx, fminf(grid->dy, grid->dz));
+            float travel_dist_mm = travel_dist * voxel_size_mm;
             weight *= expf(-optical_props.mua * travel_dist_mm);
 
             // Reduce remaining scattering path length
@@ -319,9 +321,9 @@ __global__ void mc_kernel(
         if (weight > WEIGHT_THRESHOLD && exited) {
             // Convert to world coordinates
             pos = make_float3(
-                pos_voxel.x * grid->dx,
-                pos_voxel.y * grid->dy,
-                pos_voxel.z * grid->dz
+                pos_voxel.x * grid->voxel_size.x,
+                pos_voxel.y * grid->voxel_size.y,
+                pos_voxel.z * grid->voxel_size.z
             );
 
             // Classify by exit face
@@ -333,7 +335,7 @@ __global__ void mc_kernel(
                     reflected_directions[out_idx] = dir;
                     reflected_weights[out_idx] = weight;
                 }
-            } else if (voxel_state[2] >= grid->nz) {
+            } else if (voxel_state[2] >= grid->dims.z) {
                 // +Z face (transmitted)
                 int out_idx = atomicAdd(transmitted_counter, 1);
                 if (out_idx < output_capacity) {

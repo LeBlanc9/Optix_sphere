@@ -144,6 +144,7 @@ message(STATUS "Library 'media' configured, depends on 'photon'.")
 add_library(voxel_media STATIC
     optix_sphere/voxel_media/voxel_grid_builder.cpp
     optix_sphere/voxel_media/voxel_simulator.cu
+    optix_sphere/voxel_media/voxel_sim_runner.cu
     optix_sphere/voxel_media/kernels/voxel_mc_kernel.cu
 )
 set_target_properties(voxel_media PROPERTIES

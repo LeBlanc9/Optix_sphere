@@ -2,25 +2,12 @@
 #include <memory>
 #include "voxel_grid.cuh"
 #include "voxel_grid_builder.h"
+#include "voxel_sim_config.h"
 #include "photon/sources.h"
 #include "photon/photon_batch.h"
 #include "layered_media/media_simulator.cuh"  // For HostMediaSimulationResult
-#include "kernels/voxel_mc_kernel.h"  // Kernel declaration
 
 namespace phonder::voxel {
-
-/**
- * @brief Configuration for voxel media simulation
- */
-struct SimConfig {
-    Grid* device_grid = nullptr;  // Device pointer to voxel grid
-    PhotonSource source;                // Light source configuration
-    int gpu_id = 0;
-
-    // Exit detection
-    float exit_z_min = -1.0f;  // Z coordinate for top exit (reflection)
-    float exit_z_max = -1.0f;  // Z coordinate for bottom exit (transmission)
-};
 
 /**
  * @brief Results of voxel media simulation
@@ -52,61 +39,74 @@ struct SimulationResult {
 };
 
 /**
- * @brief Simulates photon transport through voxel media
+ * @brief Voxel media simulator
  *
- * This class performs Monte Carlo simulation in a 3D voxel grid.
- * It supports arbitrary optical property distributions.
+ * Always initialized from SimConfig.
+ * Use GridBuilder to construct grids, then pass to SimConfig.
  */
 class Simulator {
 public:
     /**
-     * @brief Constructor
-     * @param grid_builder Reference to GridBuilder (must outlive this simulator)
-     * @param source Light source configuration
-     * @param gpu_id GPU device ID
+     * @brief Constructor from SimConfig
+     * @param config Simulation configuration with grid and material data
      */
-    __host__ Simulator(
-        GridBuilder& grid_builder,
-        const PhotonSource& source,
-        int gpu_id = 0
-    );
+    explicit Simulator(const SimConfig& config);
+
+    ~Simulator();
+
+    // Disable copy, enable move
+    Simulator(const Simulator&) = delete;
+    Simulator& operator=(const Simulator&) = delete;
+    Simulator(Simulator&&) = default;
+    Simulator& operator=(Simulator&&) = default;
 
     /**
-     * @brief Run simulation with specified number of photons
+     * @brief Run simulation with new photons from source
      * @param num_photons Number of photons to simulate
      * @return Simulation results on device
      */
-    __host__ SimulationResult run(int num_photons);
+    SimulationResult run(int num_photons);
 
     /**
      * @brief Run simulation with input photon batch
      * @param input_batch Initial photon batch
      * @return Simulation results on device
      */
-    __host__ SimulationResult run(const PhotonBatch& input_batch);
+    SimulationResult run(const PhotonBatch& input_batch);
 
     /**
-     * @brief Get the device grid pointer
+     * @brief Update material properties without recreating grid
+     * @param materials New material table, shape: (num_materials, 4)
+     * @param num_materials Number of materials
      */
-    __host__ const Grid* get_device_grid() const {
-        return config_.device_grid;
-    }
+    void update_materials(const float* materials, int num_materials);
 
     /**
-     * @brief Update the voxel grid without recreating the simulator
-     * @param grid_builder New grid builder
+     * @brief Update light source
+     * @param source New source configuration
      */
-    __host__ void update_grid(GridBuilder& grid_builder) {
-        config_.device_grid = grid_builder.get_device_grid();
-
-        // Update exit boundaries based on grid dimensions
-        const auto& host_grid = grid_builder.get_host_grid();
-        config_.exit_z_min = 0.0f;
-        config_.exit_z_max = host_grid.nz * host_grid.dz;
-    }
+    void update_source(const PhotonSource& source);
 
 private:
+    void initialize_from_config(const SimConfig& config);
+    void upload_grid_to_device();
+    void free_device_memory();
+
+    // Device memory
+    struct DeviceData {
+        unsigned char* grid = nullptr;           // Material IDs
+        Grid* grid_struct = nullptr;             // Grid structure
+        // Note: materials stored in constant memory (c_materials)
+    } device_data_;
+
+    // Host configuration
     SimConfig config_;
+
+    // Host-side copies (owned by Simulator when using SimConfig constructor)
+    std::vector<unsigned char> owned_grid_;
+    std::vector<float> owned_materials_;
+
+    bool owns_data_ = false;  // Whether this Simulator owns the grid data
 };
 
 } // namespace phonder::voxel
