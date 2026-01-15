@@ -138,6 +138,31 @@ target_link_libraries(media PRIVATE
 message(STATUS "Library 'media' configured, depends on 'photon'.")
 
 # --------------------------------------------
+# 2b. 'voxel_media' Library (Voxel-based Media Simulation)
+#     - Independent library for voxel-based MC
+# --------------------------------------------
+add_library(voxel_media STATIC
+    optix_sphere/voxel_media/voxel_grid_builder.cpp
+    optix_sphere/voxel_media/voxel_simulator.cu
+    optix_sphere/voxel_media/kernels/voxel_mc_kernel.cu
+)
+set_target_properties(voxel_media PROPERTIES
+    POSITION_INDEPENDENT_CODE ON
+    CUDA_SEPARABLE_COMPILATION ON
+    CUDA_RESOLVE_DEVICE_SYMBOLS ON
+)
+target_include_directories(voxel_media PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/optix_sphere
+    ${CUDAToolkit_INCLUDE_DIRS}
+)
+target_link_libraries(voxel_media PUBLIC
+    photon
+    CUDA::cudart
+    CUDA::curand
+)
+message(STATUS "Library 'voxel_media' configured.")
+
+# --------------------------------------------
 # 3. 'sphere' Library (OptiX Integrating Sphere)
 #    - Depends on the 'photon' library
 # --------------------------------------------
@@ -200,6 +225,14 @@ else()
         media
     )
     add_test(NAME LayeredMediumTest COMMAND test_layered_medium)
+
+    # Voxel simulator test (comparison with layered medium)
+    add_executable(test_voxel_simulator tests/test_voxel_simulator.cu)
+    target_link_libraries(test_voxel_simulator PRIVATE
+        voxel_media
+        media
+    )
+    add_test(NAME VoxelSimulatorTest COMMAND test_voxel_simulator)
 endif()
 
 message(STATUS "")

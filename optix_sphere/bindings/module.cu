@@ -6,6 +6,7 @@ void bind_sim(pybind11::module_ &m);
 void bind_photon(pybind11::module_ &m);
 void bind_material(pybind11::module_ &m);
 void bind_media(pybind11::module_ &m);
+void bind_voxel(pybind11::module_ &m);
 
 PYBIND11_MODULE(_core, m) {
     m.doc() = "OptiX Sphere - Monte Carlo simulation for integrating spheres";
@@ -17,4 +18,5 @@ PYBIND11_MODULE(_core, m) {
     bind_photon(m);
     bind_material(m);
     bind_media(m);
+    bind_voxel(m);
 }

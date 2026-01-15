@@ -66,8 +66,6 @@ int main() {
 
     std::cout << "Normalized weights (per incident photon):" << std::endl;
     std::cout << "  Total Reflected:    " << (reflected_weight_sum + specular_reflection) / num_photons_to_simulate << std::endl;
-    std::cout << "    - Specular:       " << specular_reflection / num_photons_to_simulate << std::endl;
-    std::cout << "    - Diffuse:        " << reflected_weight_sum / num_photons_to_simulate << std::endl;
     std::cout << "  Total Transmitted:  " << transmitted_weight_sum / num_photons_to_simulate << std::endl;
     std::cout << "  Total (R+T):        " << (reflected_weight_sum + transmitted_weight_sum + specular_reflection) / num_photons_to_simulate << std::endl;
     std::cout << "  Absorbed:           " << 1.0 - (reflected_weight_sum + transmitted_weight_sum + specular_reflection) / num_photons_to_simulate << std::endl;
