@@ -6,7 +6,6 @@
 #include "scene/scene.h"   // For Scene
 #include "photon/sources.h"    // Data-only source definitions
 #include "photon/photon_batch.h"      // For PhotonBatch
-#include "photon/launchers.h"  // For generate_photons_on_device in implementation
 #include "simulation/simulation_result.h"
 #include "material.h"          // For MaterialDescriptor
 
@@ -81,7 +80,7 @@ public:
      * @param config 通用的仿真运行配置 (光线数、反弹次数等)。
      * @return 仿真结果。
      */
-    SimulationResult run(const phonder::PhotonSource& procedural_source, const SimConfig& config);
+    SimulationResult run(phonder::PhotonSource& procedural_source, const SimConfig& config);
 
     /**
      * @brief 运行蒙特卡洛仿真。

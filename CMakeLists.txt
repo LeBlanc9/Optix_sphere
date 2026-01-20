@@ -98,7 +98,7 @@ add_custom_target(embedded_ptx_target ALL
 # --------------------------------------------
 add_library(photon STATIC
     optix_sphere/photon/photon_batch.cu
-    optix_sphere/photon/launchers.cu
+    optix_sphere/photon/sources.cu
     optix_sphere/photon/photon_transform.cu
 )
 set_target_properties(photon PROPERTIES
@@ -142,7 +142,6 @@ message(STATUS "Library 'media' configured, depends on 'photon'.")
 #     - Independent library for voxel-based MC
 # --------------------------------------------
 add_library(voxel_media STATIC
-    optix_sphere/voxel_media/voxel_grid_builder.cpp
     optix_sphere/voxel_media/voxel_simulator.cu
     optix_sphere/voxel_media/voxel_sim_runner.cu
     optix_sphere/voxel_media/kernels/voxel_mc_kernel.cu

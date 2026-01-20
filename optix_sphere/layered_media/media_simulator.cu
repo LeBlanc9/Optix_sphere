@@ -1,6 +1,5 @@
 #include "layered_media/media_simulator.cuh"
 #include "layered_media/media_kernel.cuh"
-#include "photon/launchers.h"
 #include <thrust/device_vector.h>
 #include <thrust/host_vector.h>
 #include <stdexcept>
@@ -29,19 +28,19 @@ static MediaSimulationResult _run_simulation(const MediaSimConfig& config, const
     params.output_buffer_capacity = num_photons * 2;
     
     // Get const pointers for the input batch
-    params.input_positions = input_batch.c_positions_ptr();
-    params.input_directions = input_batch.c_directions_ptr();
-    params.input_weights = input_batch.c_weights_ptr();
+    params.input_positions = input_batch.positions();
+    params.input_directions = input_batch.directions();
+    params.input_weights = input_batch.weights();
     params.input_batch_size = num_photons;
 
     // Pass writable raw pointers for output buffers
-    params.reflected_positions = result.reflected_batch.positions_ptr();
-    params.reflected_directions = result.reflected_batch.directions_ptr();
-    params.reflected_weights = result.reflected_batch.weights_ptr();
+    params.reflected_positions = result.reflected_batch.positions();
+    params.reflected_directions = result.reflected_batch.directions();
+    params.reflected_weights = result.reflected_batch.weights();
 
-    params.transmitted_positions = result.transmitted_batch.positions_ptr();
-    params.transmitted_directions = result.transmitted_batch.directions_ptr();
-    params.transmitted_weights = result.transmitted_batch.weights_ptr();
+    params.transmitted_positions = result.transmitted_batch.positions();
+    params.transmitted_directions = result.transmitted_batch.directions();
+    params.transmitted_weights = result.transmitted_batch.weights();
     
     params.specular_reflection_weight = d_specular_reflection_weight;
 
@@ -98,8 +97,12 @@ __host__ MediaSimulationResult MediaSimulator::run(int num_photons) {
     // For rapid subsequent calls, a better random seed source might be needed.
     unsigned long long seed = static_cast<unsigned long long>(time(nullptr)) + config_.gpu_id;
 
-    generate_photons_on_device(config_.source, input_batch, num_photons, seed);
-    
+    if (config_.source) {
+        config_.source->generate(input_batch, num_photons, seed);
+    } else {
+        throw std::runtime_error("No photon source configured");
+    }
+
     return _run_simulation(config_, input_batch);
 }
 

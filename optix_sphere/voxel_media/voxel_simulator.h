@@ -1,7 +1,6 @@
 #pragma once
 #include <memory>
 #include "voxel_grid.cuh"
-#include "voxel_grid_builder.h"
 #include "voxel_sim_config.h"
 #include "photon/sources.h"
 #include "photon/photon_batch.h"
@@ -13,12 +12,16 @@ namespace phonder::voxel {
  * @brief Results of voxel media simulation
  */
 struct SimulationResult {
-    PhotonBatch specular_batch;      // Specular reflection at entry
-    PhotonBatch reflected_batch;     // Diffuse reflection from -Z face
-    PhotonBatch transmitted_batch;   // Transmission from +Z face
+    PhotonBatch specular_batch;         // Specular reflection at entry
+    PhotonBatch negative_boundary_batch; // Photons exiting from -X/-Y/-Z faces
+    PhotonBatch positive_boundary_batch; // Photons exiting from +X/+Y/+Z faces
 
     /**
-     * @brief Copy results to host
+     * @brief Copy results to host (backward compatibility)
+     *
+     * For backward compatibility with layered media:
+     * - reflected_batch = negative_boundary_batch (typically -Z face)
+     * - transmitted_batch = positive_boundary_batch (typically +Z face)
      */
     HostMediaSimulationResult to_host() const {
         // Calculate total specular reflection weight
@@ -31,8 +34,8 @@ struct SimulationResult {
         }
 
         return {
-            reflected_batch.to_host(),
-            transmitted_batch.to_host(),
+            negative_boundary_batch.to_host(),  // reflected
+            positive_boundary_batch.to_host(),  // transmitted
             specular_weight
         };
     }
@@ -42,7 +45,7 @@ struct SimulationResult {
  * @brief Voxel media simulator
  *
  * Always initialized from SimConfig.
- * Use GridBuilder to construct grids, then pass to SimConfig.
+ * SimConfig owns all data (std::vector), so no dangling pointer issues.
  */
 class Simulator {
 public:
@@ -85,7 +88,7 @@ public:
      * @brief Update light source
      * @param source New source configuration
      */
-    void update_source(const PhotonSource& source);
+    void update_source(std::shared_ptr<PhotonSource> source);
 
 private:
     void initialize_from_config(const SimConfig& config);
@@ -99,14 +102,8 @@ private:
         // Note: materials stored in constant memory (c_materials)
     } device_data_;
 
-    // Host configuration
+    // Host configuration (owns data via std::vector)
     SimConfig config_;
-
-    // Host-side copies (owned by Simulator when using SimConfig constructor)
-    std::vector<unsigned char> owned_grid_;
-    std::vector<float> owned_materials_;
-
-    bool owns_data_ = false;  // Whether this Simulator owns the grid data
 };
 
 } // namespace phonder::voxel

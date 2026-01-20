@@ -24,10 +24,9 @@ int main() {
         );
 
         // --- Create Photon Source ---
-        phonder::IsotropicPointSource source_params;
-        source_params.position = {0.0f, 0.0f, 0.0f};
-        source_params.weight = 1.0; // Represents 1W total power
-        phonder::PhotonSource light_source = source_params;
+        auto source_params = std::make_shared<phonder::IsotropicPointSource>();
+        source_params->position = {0.0f, 0.0f, 0.0f};
+        source_params->weight = 1.0; // Represents 1W total power
 
         spdlog::info("=== Test Configuration ===");
         spdlog::info("  Source Type: Isotropic Point Source");
@@ -59,7 +58,7 @@ int main() {
         // --- Theoretical Calculation ---
         float sphere_radius_for_theory = 152.4f / 2.0f;
         float wall_reflectance_for_theory = wall_reflectance;
-        float incident_power_for_theory = phonder::get_source_power(light_source);
+        float incident_power_for_theory = source_params->weight;
 
         // Create a theoretical sphere model
         theory::TheoreticalIntegratingSphere theoretical_sphere_model(
@@ -94,7 +93,7 @@ int main() {
         spdlog::info("\n🔹 Running Mesh Non-NEE...");
         config.use_nee = false;
         auto start_time_non_nee = std::chrono::high_resolution_clock::now();
-        mesh_non_nee_result = simulator.run(light_source, config);
+        mesh_non_nee_result = simulator.run(*source_params, config);
         auto end_time_non_nee = std::chrono::high_resolution_clock::now();
         auto duration_non_nee = std::chrono::duration_cast<std::chrono::milliseconds>(end_time_non_nee - start_time_non_nee);
         spdlog::info("  ✅ Mesh Non-NEE took: {} ms", duration_non_nee.count());
@@ -107,7 +106,7 @@ int main() {
         spdlog::info("\n🔹 Running Mesh NEE...");
         config.use_nee = true;
         auto start_time_nee = std::chrono::high_resolution_clock::now();
-        mesh_nee_result = simulator.run(light_source, config);
+        mesh_nee_result = simulator.run(*source_params, config);
         auto end_time_nee = std::chrono::high_resolution_clock::now();
         auto duration_nee = std::chrono::duration_cast<std::chrono::milliseconds>(end_time_nee - start_time_nee);
         spdlog::info("  ✅ Mesh NEE took: {} ms", duration_nee.count());

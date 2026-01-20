@@ -55,14 +55,11 @@ struct Grid {
     // Number of materials (properties stored in c_materials constant memory)
     int num_materials;
 
-    // Ambient (outside) refractive index
-    float ambient_n;
-
     __host__ __device__ Grid()
         : dims(make_int3(0, 0, 0)),
           voxel_size(make_float3(0.0f, 0.0f, 0.0f)),
           material_ids(nullptr),
-          num_materials(0), ambient_n(1.0f) {}
+          num_materials(0) {}
 
     /**
      * @brief Convert world position to voxel indices
@@ -113,8 +110,9 @@ struct Grid {
      */
     __device__ OpticalProperties get_properties(const int3& voxel_idx) const {
         if (!is_inside(voxel_idx)) {
-            // Outside the grid: return ambient properties (no absorption/scattering)
-            return OpticalProperties(ambient_n, 0.0f, 1e-6f, 0.0f);
+            // Outside the grid: return ambient properties (material 0)
+            float4 ambient_props = c_materials[0];
+            return OpticalProperties(ambient_props.x, ambient_props.y, ambient_props.z, ambient_props.w);
         }
         int idx = voxel_to_index(voxel_idx);
         return get_properties_at_index(idx);

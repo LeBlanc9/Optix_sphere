@@ -119,9 +119,10 @@ __device__ inline float hg_sample_costheta(float g, float rand) {
  *
  * @param v Direction vector (modified in place)
  * @param g Anisotropy factor
- * @param state Random number generator state
+ * @param state Random number generator state (template supports any cuRAND type)
  */
-__device__ __forceinline__ void scatter(float3* v, float g, curandState* state) {
+template<typename RNGState>
+__device__ __forceinline__ void scatter(float3* v, float g, RNGState* state) {
     float costheta = hg_sample_costheta(g, curand_uniform(state));
     float sintheta = sqrtf(1.f - costheta * costheta);
 
@@ -135,10 +136,11 @@ __device__ __forceinline__ void scatter(float3* v, float g, curandState* state) 
 /**
  * @brief Sample scattering path length
  *
- * @param state Random number generator state
+ * @param state Random number generator state (template supports any cuRAND type)
  * @return Path length in mean free paths
  */
-__device__ inline float sample_scatter_length(curandState* state) {
+template<typename RNGState>
+__device__ inline float sample_scatter_length(RNGState* state) {
     return -logf(curand_uniform(state) + EPS);
 }
 

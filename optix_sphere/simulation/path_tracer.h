@@ -7,7 +7,6 @@
 #include "optix_pipeline_builder.h"
 #include "optix_sbt_builder.h"
 #include "photon/sources.h"    // Data-only source definitions
-#include "photon/launchers.h"  // C++ API for generate_photons_on_device
 #include "photon/photon_batch.h"      // For PhotonBatch
 #include <memory>
 

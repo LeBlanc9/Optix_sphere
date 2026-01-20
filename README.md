@@ -89,7 +89,6 @@ If you use this software in your research, please cite:
 ```bibtex
 @software{optix_sphere,
   title = {OptiX Sphere: GPU-Accelerated Integrating Sphere Simulation},
-  author = {Your Name},
   year = {2024},
   url = {https://github.com/yourusername/optix_sphere}
 }

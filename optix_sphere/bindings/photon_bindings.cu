@@ -1,109 +1,131 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
-#include <pybind11/numpy.h>
-
 #include "photon/sources.h"
 #include "photon/photon_batch.h"
 #include "photon/photon_transform.cuh"
-#include "photon/launchers.h"
 
 namespace py = pybind11;
 using namespace phonder;
 
 void bind_photon(py::module_ &m) {
-    py::class_<HostPhotonBatch>(m, "HostPhotonBatch")
-        .def(py::init<>())
-        .def("size", &HostPhotonBatch::size)
-        .def_property_readonly("positions", [](const HostPhotonBatch &b) {
-            std::vector<py::ssize_t> shape = {static_cast<py::ssize_t>(b.size()), 3};
-            return py::array_t<float>(shape, reinterpret_cast<const float*>(b.positions.data()));
-        })
-        .def_property_readonly("directions", [](const HostPhotonBatch &b) {
-            std::vector<py::ssize_t> shape = {static_cast<py::ssize_t>(b.size()), 3};
-            return py::array_t<float>(shape, reinterpret_cast<const float*>(b.directions.data()));
-        })
-        .def_property_readonly("weights", [](const HostPhotonBatch &b) {
-            return py::array_t<double>(b.weights.size(), b.weights.data());
-        });
-
+    // PhotonBatch
     py::class_<PhotonBatch>(m, "PhotonBatch")
+        .def(py::init<>(), "Create empty PhotonBatch")
+        .def(py::init<int>(), py::arg("size"), "Create PhotonBatch with size")
+        .def("size", &PhotonBatch::size, "Get number of photons")
+        .def("empty", &PhotonBatch::empty, "Check if batch is empty")
+        .def("resize", &PhotonBatch::resize, py::arg("new_size"), "Resize batch")
+        .def("clear", &PhotonBatch::clear, "Clear batch")
+        .def("total_weight", &PhotonBatch::total_weight, "Get total weight of all photons")
+        .def("append", &PhotonBatch::append, py::arg("other"),
+             "Append another batch to this one (GPU memory copy)")
+        .def("swap", &PhotonBatch::swap, py::arg("other"),
+             "Swap data with another batch (zero-copy)")
+        .def_static("merge", &PhotonBatch::merge, py::arg("batches"),
+             "Merge multiple batches into a new batch")
+        .def("to_host", &PhotonBatch::to_host, "Copy batch to host memory");
+
+    // HostPhotonBatch
+    py::class_<HostPhotonBatch>(m, "HostPhotonBatch")
+        .def(py::init<>(), "Create empty HostPhotonBatch")
+        .def_readonly("positions", &HostPhotonBatch::positions, "Photon positions")
+        .def_readonly("directions", &HostPhotonBatch::directions, "Photon directions")
+        .def_readonly("weights", &HostPhotonBatch::weights, "Photon weights");
+
+    // Abstract base class
+    py::class_<PhotonSource, std::shared_ptr<PhotonSource>>(m, "PhotonSource")
+        .def("generate", &PhotonSource::generate,
+             py::arg("batch"), py::arg("num_photons"), py::arg("seed") = 42,
+             "Generate photons into a PhotonBatch")
+        .def_readwrite("weight", &PhotonSource::weight,
+             "Source weight/power");
+
+    // IsotropicPointSource
+    py::class_<IsotropicPointSource, PhotonSource, std::shared_ptr<IsotropicPointSource>>(m, "IsotropicPointSource")
         .def(py::init<>())
-        .def("size", &PhotonBatch::size)
-        .def("empty", &PhotonBatch::empty)
-        .def("clear", &PhotonBatch::clear)
-        .def("total_weight", &PhotonBatch::total_weight)
-        .def("to_host", &PhotonBatch::to_host,
-             "Transfer photon batch from GPU to CPU memory, returning a HostPhotonBatch.");
+        .def_readwrite("position", &IsotropicPointSource::position,
+                       "Source position (float3)")
+        .def_readwrite("weight", &IsotropicPointSource::weight,
+                       "Photon weight");
 
-
-    m.def("translate_photons", &translate_photons,
-          py::arg("input_batch"), py::arg("offset"),
-          "Translate photon positions by a fixed offset (creates new batch).\n\n"
-          "Args:\n"
-          "    input_batch (PhotonBatch): Input photon batch on GPU\n"
-          "    offset (float3): Translation vector (mm)\n\n"
-          "Returns:\n"
-          "    PhotonBatch: New batch with translated positions\n\n"
-          "Example:\n"
-          "    >>> batch = osg.generate_photons(source, 10000)\n"
-          "    >>> translated = osg.translate_photons(batch, osg.float3(0, 0, -12.7))\n"
-          "    >>> # Original batch is unchanged\n");
-
-    m.def("translate_photons_inplace", &translate_photons_inplace,
-          py::arg("batch"), py::arg("offset"),
-          "Translate photon positions in-place (modifies batch directly)."
-          "Args:\n"
-          "    batch (PhotonBatch): Photon batch to modify (will be changed!)\n"
-          "    offset (float3): Translation vector (mm)\n\n"
-          "Returns:\n"
-          "    None (modifies batch in-place)\n\n"
-          "Example:\n"
-          "    >>> batch = osg.generate_photons(source, 10000)\n"
-          "    >>> osg.translate_photons_inplace(batch, osg.float3(0, 0, -12.7))\n"
-          "    >>> # batch has been modified\n");
-
-    py::class_<IsotropicPointSource>(m, "IsotropicPointSource")
+    // CollimatedBeamSource
+    py::class_<CollimatedBeamSource, PhotonSource, std::shared_ptr<CollimatedBeamSource>>(m, "CollimatedBeamSource")
         .def(py::init<>())
-        .def_readwrite("position", &IsotropicPointSource::position)
-        .def_readwrite("weight", &IsotropicPointSource::weight);
+        .def_readwrite("position", &CollimatedBeamSource::position,
+                       "Source position (float3)")
+        .def_readwrite("direction", &CollimatedBeamSource::direction,
+                       "Beam direction (float3)")
+        .def_readwrite("weight", &CollimatedBeamSource::weight,
+                       "Photon weight");
 
-    py::class_<CollimatedBeamSource>(m, "CollimatedBeamSource")
+    // SpotSource
+    py::class_<SpotSource, PhotonSource, std::shared_ptr<SpotSource>>(m, "SpotSource")
         .def(py::init<>())
-        .def_readwrite("position", &CollimatedBeamSource::position)
-        .def_readwrite("direction", &CollimatedBeamSource::direction)
-        .def_readwrite("weight", &CollimatedBeamSource::weight);
+        .def_readwrite("center_position", &SpotSource::center_position,
+                       "Disk center position (float3)")
+        .def_readwrite("disk_normal", &SpotSource::disk_normal,
+                       "Disk normal vector (float3)")
+        .def_readwrite("direction", &SpotSource::direction,
+                       "Beam direction (float3)")
+        .def_readwrite("radius", &SpotSource::radius,
+                       "Disk radius (mm)")
+        .def_readwrite("weight", &SpotSource::weight,
+                       "Photon weight");
 
+    // GaussianBeamSource
+    py::class_<GaussianBeamSource, PhotonSource, std::shared_ptr<GaussianBeamSource>>(m, "GaussianBeamSource")
+        .def(py::init<>())
+        .def_readwrite("center_position", &GaussianBeamSource::center_position,
+                       "Beam center position (float3)")
+        .def_readwrite("direction", &GaussianBeamSource::direction,
+                       "Beam direction (float3)")
+        .def_readwrite("beam_waist", &GaussianBeamSource::beam_waist,
+                       "Beam waist radius (mm)")
+        .def_readwrite("weight", &GaussianBeamSource::weight,
+                       "Photon weight");
 
+    // FocusedSpotSource
+    py::class_<FocusedSpotSource, PhotonSource, std::shared_ptr<FocusedSpotSource>>(m, "FocusedSpotSource")
+        .def(py::init<>())
+        .def_readwrite("spot_center", &FocusedSpotSource::spot_center,
+                       "Target spot center (float3)")
+        .def_readwrite("spot_radius", &FocusedSpotSource::spot_radius,
+                       "Target spot radius (mm)")
+        .def_readwrite("convergence_half_angle_rad", &FocusedSpotSource::convergence_half_angle_rad,
+                       "Convergence half angle (radians)")
+        .def_readwrite("main_axis", &FocusedSpotSource::main_axis,
+                       "Main optical axis (float3)")
+        .def_readwrite("source_distance", &FocusedSpotSource::source_distance,
+                       "Distance from source to spot (mm)")
+        .def_readwrite("weight", &FocusedSpotSource::weight,
+                       "Photon weight");
+
+    // Convenience function for generating photons
     m.def("generate_photons",
-          [](const PhotonSource& source, int num_photons, unsigned long long seed = 42) {
+          [](PhotonSource& source, int num_photons, unsigned long long seed = 42) {
               PhotonBatch batch;
-              generate_photons_on_device(source, batch, num_photons, seed);
+              source.generate(batch, num_photons, seed);
               return batch;
           },
           py::arg("source"), py::arg("num_photons"), py::arg("seed") = 42,
-          "Generate photons from any source type on the GPU.\n\n"
-          "This is the unified interface that works with all source types:\n"
-          "  - IsotropicPointSource\n"
-          "  - CollimatedBeamSource\n"
-          "  - SpotSource\n"
-          "  - GaussianBeamSource\n"
-          "  - FocusedSpotSource\n\n"
+          "Generate photons from any source type\n\n"
           "Args:\n"
-          "    source: Any PhotonSource type (see list above)\n"
+          "    source: Any PhotonSource object\n"
           "    num_photons (int): Number of photons to generate\n"
-          "    seed (int, optional): Random seed for generation. Defaults to 42.\n\n"
+          "    seed (int, optional): Random seed. Defaults to 42.\n\n"
           "Returns:\n"
-          "    PhotonBatch: A batch of photons on the GPU\n\n"
+          "    PhotonBatch: Generated photons on GPU\n\n"
           "Example:\n"
-          "    >>> # Collimated beam\n"
           "    >>> source = osg.CollimatedBeamSource()\n"
-          "    >>> source.position = osg.float3(0, 0, -1)\n"
-          "    >>> source.direction = osg.float3(0, 0, 1)\n"
-          "    >>> batch = osg.generate_photons(source, 10000)\n"
-          "    >>> \n"
-          "    >>> # Isotropic point source\n"
-          "    >>> source = osg.IsotropicPointSource()\n"
-          "    >>> source.position = osg.float3(0, 0, 0)\n"
+          "    >>> source.position = (0, 0, -1)\n"
+          "    >>> source.direction = (0, 0, 1)\n"
           "    >>> batch = osg.generate_photons(source, 10000)\n");
+
+    m.def("translate_photons", &translate_photons,
+          py::arg("input_batch"), py::arg("offset"));
+
+    m.def("translate_photons_inplace", &translate_photons_inplace,
+          py::arg("batch"), py::arg("offset"));
+
 }
 

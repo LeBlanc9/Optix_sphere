@@ -116,7 +116,7 @@ void bind_sim(py::module_ &m) {
              "    >>> sim = Simulator()\n"
              "    >>> sim.build_scene(scene, materials)\n"
              "    >>> result = sim.run(source, config)")
-        .def("run", static_cast<SimulationResult (Simulator::*)(const phonder::PhotonSource&, const SimConfig&)>(&Simulator::run),
+        .def("run", static_cast<SimulationResult (Simulator::*)(phonder::PhotonSource&, const SimConfig&)>(&Simulator::run),
              py::arg("photon_source"), py::arg("config"))
         .def("run", static_cast<SimulationResult (Simulator::*)(const phonder::PhotonBatch&, const SimConfig&)>(&Simulator::run),
              py::arg("source_batch"), py::arg("config"))

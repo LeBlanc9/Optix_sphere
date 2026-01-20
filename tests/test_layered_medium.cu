@@ -23,10 +23,10 @@ int main() {
     std::cout << std::endl;
 
     // 2. Create point source (incident beam)
-    phonder::CollimatedBeamSource source_params;
-    source_params.position = make_float3(0.0f, 0.0f, -0.1f);
-    source_params.direction = make_float3(0.0f, 0.0f, 1.0f);
-    source_params.weight = 1.0;
+    auto source_params = std::make_shared<phonder::CollimatedBeamSource>();
+    source_params->position = make_float3(0.0f, 0.0f, -0.1f);
+    source_params->direction = make_float3(0.0f, 0.0f, 1.0f);
+    source_params->weight = 1.0;
 
     std::cout << "Source configuration:" << std::endl;
     std::cout << "  Type: Collimated Beam source" << std::endl;

@@ -1,7 +1,6 @@
 #include "path_tracer.h"
 #include "simulator.h"          // For SimConfig definition
 #include "simulation/device_params.h"
-#include "photon/launchers.h"
 #include <spdlog/spdlog.h>
 #include <thrust/device_vector.h>
 #include <thrust/reduce.h>      // For thrust::reduce
@@ -96,9 +95,9 @@ SimulationResult PathTracer::launch_from_batch(
     params.use_nee = config.use_nee;
 
     // Data-driven mode: Get const device pointers directly (zero-copy)
-    params.photon_positions = input_batch.c_positions_ptr();
-    params.photon_directions = input_batch.c_directions_ptr();
-    params.photon_weights = input_batch.c_weights_ptr();
+    params.photon_positions = input_batch.positions();
+    params.photon_directions = input_batch.directions();
+    params.photon_weights = input_batch.weights();
     params.photon_seed_base = config.random_seed; // Still use config seed for internal randomness
     params.num_input_photons = photon_count;
 

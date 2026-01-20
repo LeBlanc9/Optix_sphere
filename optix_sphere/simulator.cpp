@@ -3,7 +3,6 @@
 #include "scene/device_scene.h"
 #include "simulation/path_tracer.h" // Now includes launch_from_batch
 #include "embedded_ptx.h"
-#include "photon/launchers.h" // For phonder::generate_photons_on_device
 #include "geometry/mesh_loader.h" // For MeshLoader::get_default_material_configs
 #include <spdlog/spdlog.h>
 #include <stdexcept>
@@ -96,7 +95,7 @@ SimulationResult Simulator::run(const phonder::PhotonBatch& source_batch, const 
 }
 
 // Overload 2: Takes a procedural PhotonSource (generates batch internally)
-SimulationResult Simulator::run(const phonder::PhotonSource& procedural_source, const SimConfig& config) {
+SimulationResult Simulator::run(phonder::PhotonSource& procedural_source, const SimConfig& config) {
     if (!pimpl_->scene_is_built_ || !pimpl_->tracer_) {
         throw std::runtime_error("Simulation cannot be run before a scene is built. Call 'build_scene_from_file' first.");
     }
@@ -106,7 +105,7 @@ SimulationResult Simulator::run(const phonder::PhotonSource& procedural_source, 
     spdlog::info("   Use NEE: {}", config.use_nee ? "Enabled" : "Disabled");
 
     phonder::PhotonBatch d_batch;
-    phonder::generate_photons_on_device(procedural_source, d_batch, config.num_rays, config.random_seed);
+    procedural_source.generate(d_batch, config.num_rays, config.random_seed);
 
     if (d_batch.empty()) {
         spdlog::warn("Photon generation resulted in 0 photons. Aborting procedural launch.");

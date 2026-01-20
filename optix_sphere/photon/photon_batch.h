@@ -38,14 +38,16 @@ public:
     PhotonBatch(PhotonBatch&& other) noexcept;
     PhotonBatch& operator=(PhotonBatch&& other) noexcept;
 
-    // --- Type-Safe Device Data Access ---
-    float3* positions_ptr();
-    float3* directions_ptr();
-    double* weights_ptr();
-    
-    const float3* c_positions_ptr() const;
-    const float3* c_directions_ptr() const;
-    const double* c_weights_ptr() const;
+    // --- Device Data Access ---
+    // Non-const overloads (returns writable pointers)
+    float3* positions();
+    float3* directions();
+    double* weights();
+
+    // Const overloads (returns read-only pointers)
+    const float3* positions() const;
+    const float3* directions() const;
+    const double* weights() const;
 
     // --- Management ---
     void resize(size_t new_size);
@@ -53,7 +55,12 @@ public:
     bool empty() const;
     void clear();
     double total_weight() const;
-    
+
+    // --- Batch Operations ---
+    void append(const PhotonBatch& other);
+    void swap(PhotonBatch& other) noexcept;
+    static PhotonBatch merge(const std::vector<const PhotonBatch*>& batches);
+
     // --- Explicit Data Movement ---
     HostPhotonBatch to_host() const;
 

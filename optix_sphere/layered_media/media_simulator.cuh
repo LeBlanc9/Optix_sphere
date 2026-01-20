@@ -9,7 +9,7 @@ namespace phonder {
 
 struct MediaSimConfig {
     LayeredMedium medium;
-    PhotonSource source; // Holds a variant of source parameters
+    std::shared_ptr<PhotonSource> source;
     int gpu_id = 0;
     // --- Filter parameters ---
     float reflected_radius = -1.0f;    // Maximum radius for reflected photons (-1 for no filter)

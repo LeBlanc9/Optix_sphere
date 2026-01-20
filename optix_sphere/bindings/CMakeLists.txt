@@ -24,14 +24,11 @@ target_link_libraries(_core PRIVATE
 
 target_compile_definitions(_core PRIVATE FMT_UNICODE=0)
 
-# 安装与打包仅在 scikit-build 打包模式启用
 if(SKBUILD)
     install(TARGETS _core LIBRARY DESTINATION ${SKBUILD_PLATLIB_DIR}/optix_sphere)
 
-    # --- Generate Python stub files using pybind11-stubgen ---
     message(STATUS "Configuring pybind11-stubgen to generate type stubs...")
 
-    # Generate stubs during install phase (after module is available)
     install(CODE "
         message(STATUS \"Generating Python stub files for optix_sphere._core...\")
 

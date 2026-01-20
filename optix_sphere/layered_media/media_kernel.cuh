@@ -112,8 +112,8 @@ static __global__ void media_simulation_kernel(const MediaKernelParams* params) 
         // 确保光子从表面入射（z=0）
         const float3 surface_pos = (pos.z < 0.0f) ? pos + (-pos.z / dir.z) * dir : pos;
         if (fabsf(surface_pos.x) > params->medium->width / 2 || fabsf(surface_pos.y) > params->medium->width / 2) {
+            // Photon out of bounds - discard
             break;
-            printf("Warning: Photon starting x position out of medium width bounds.\n");
         }
 
         const float n_ambient = params->medium->ambient_n;

@@ -3,7 +3,6 @@
 #include <chrono>
 #include <vector>
 #include "voxel_media/voxel_simulator.h"
-#include "voxel_media/voxel_grid_builder.h"
 #include "voxel_media/voxel_sim_config.h"
 #include "layered_media/media_simulator.cuh"
 #include "photon/sources.h"
@@ -30,10 +29,10 @@ void test_comparison_with_layered_medium() {
     std::cout << "  Total thickness: 3.0mm" << std::endl;
 
     // Source for LayeredMedium (centered at origin)
-    CollimatedBeamSource layered_source;
-    layered_source.position = make_float3(0.0f, 0.0f, -0.1f);
-    layered_source.direction = make_float3(0.0f, 0.0f, 1.0f);
-    layered_source.weight = 1.0;
+    auto layered_source = std::make_shared<CollimatedBeamSource>();
+    layered_source->position = make_float3(0.0f, 0.0f, -0.1f);
+    layered_source->direction = make_float3(0.0f, 0.0f, 1.0f);
+    layered_source->weight = 1.0;
 
     MediaSimConfig layered_config;
     layered_config.medium = layered_medium;
@@ -67,43 +66,49 @@ void test_comparison_with_layered_medium() {
     // === Method 2: VoxelGrid ===
     std::cout << "=== VoxelGrid (Our Implementation) - 3 Layers ===" << std::endl;
 
-    // Step 1: Create voxel grid using GridBuilder (only material IDs)
-    GridBuilder voxel_builder(100, 100, 3);
+    // Step 1: Create voxel grid directly using nested vectors
+    int nx = 100;
+    int ny = 100;
+    int nz = 3;
 
-    // Fill each layer with material IDs (1, 2, 3)
-    voxel_builder.fill_region(0, 100, 0, 100, 0, 1, 1);  // Layer 1 -> material ID 1
-    voxel_builder.fill_region(0, 100, 0, 100, 1, 2, 2);  // Layer 2 -> material ID 2
-    voxel_builder.fill_region(0, 100, 0, 100, 2, 3, 3);  // Layer 3 -> material ID 3
+    auto voxel_source = std::make_shared<CollimatedBeamSource>();
+    voxel_source->position = make_float3(50.0f, 50.0f, -0.1f);
+    voxel_source->direction = make_float3(0.0f, 0.0f, 1.0f);
+    voxel_source->weight = 1.0;
 
-    // Step 2: Define materials separately (n, mua, mus, g for each material)
-    std::vector<float> materials = {
-        1.0f,  0.0f,   1e-6f, 0.0f,   // Material 0 (ambient/default)
-        1.42f, 0.01f,  20.0f, 0.7f,   // Material 1
-        1.00f, 0.1f,   90.0f, 0.7f,   // Material 2
-        1.42f, 0.3f,   80.0f, 0.7f    // Material 3
-    };
-
-    std::cout << "  Created 100x100x3 voxel grid with 4 material types" << std::endl;
-    std::cout << "  Material 0: n=1.00, mua=0.0,  mus=1e-6, g=0.0 (ambient)" << std::endl;
-    std::cout << "  Material 1: n=1.42, mua=0.01, mus=20.0, g=0.7" << std::endl;
-    std::cout << "  Material 2: n=1.00, mua=0.1,  mus=90.0, g=0.7" << std::endl;
-    std::cout << "  Material 3: n=1.42, mua=0.3,  mus=80.0, g=0.7" << std::endl;
-
-    // Step 3: Source for VoxelGrid (positioned at voxel center: 50mm, 50mm)
-    CollimatedBeamSource voxel_source;
-    voxel_source.position = make_float3(50.0f, 50.0f, -0.1f);
-    voxel_source.direction = make_float3(0.0f, 0.0f, 1.0f);
-    voxel_source.weight = 1.0;
-
-    // Step 4: Create SimConfig
     SimConfig voxel_config;
-    voxel_config.set_grid(voxel_builder.get_grid(),
-                          voxel_builder.get_nx(),
-                          voxel_builder.get_ny(),
-                          voxel_builder.get_nz());  // Default: 1x1x1 mm
-    voxel_config.set_materials(materials.data(), materials.size() / 4);
-    voxel_config.set_source(voxel_source);
-    voxel_config.set_exit_boundaries(0.0f, 3.0f);  // Exit at z=0 and z=3mm
+
+    // Create 3D nested vector grid and fill with material IDs
+    voxel_config.grid.resize(nx);
+    for (int x = 0; x < nx; x++) {
+        voxel_config.grid[x].resize(ny);
+        for (int y = 0; y < ny; y++) {
+            voxel_config.grid[x][y].resize(nz);
+            voxel_config.grid[x][y][0] = 1;  // Layer 1 -> material ID 1
+            voxel_config.grid[x][y][1] = 2;  // Layer 2 -> material ID 2
+            voxel_config.grid[x][y][2] = 3;  // Layer 3 -> material ID 3
+        }
+    }
+
+    voxel_config.voxel_size = make_float3(1.0f, 1.0f, 1.0f);
+    voxel_config.materials = std::vector<std::vector<float>>({
+        {1.0f,  0.0f,   1e-6f, 0.0f},   // Material 0 (ambient/default)
+        {1.42f, 0.01f,  20.0f, 0.7f},   // Material 1
+        {1.00f, 0.1f,   90.0f, 0.7f},   // Material 2
+        {1.42f, 0.3f,   80.0f, 0.7f}    // Material 3
+    });
+
+    voxel_config.source = voxel_source;
+    voxel_config.merge_specular = true;
+    
+
+    voxel_config.boundary_collection.enable_z_faces();
+
+    // Debug: print boundary collection config
+    std::cout << "Boundary collection: " << voxel_config.boundary_collection.to_string() << std::endl;
+    for (int i = 0; i < 6; i++) {
+        std::cout << "  Face " << i << ": " << (voxel_config.boundary_collection.collect_faces[i] ? "enabled" : "disabled") << std::endl;
+    }
 
     // Step 5: Create simulator
     Simulator voxel_sim(voxel_config);
@@ -113,20 +118,12 @@ void test_comparison_with_layered_medium() {
     cudaDeviceSynchronize();  // Ensure GPU work is complete
     auto end_voxel = std::chrono::high_resolution_clock::now();
 
-    auto voxel_host = voxel_result.to_host();
 
     double voxel_time_ms = std::chrono::duration<double, std::milli>(end_voxel - start_voxel).count();
 
-    // Calculate specular weight
-    double voxel_specular = 0.0;
-    auto voxel_spec_host = voxel_result.specular_batch.to_host();
-    for (const auto& w : voxel_spec_host.weights) {
-        voxel_specular += w;
-    }
-    voxel_specular /= num_photons;
-
-    double voxel_R_diffuse = voxel_host.reflected_batch.total_weight() / num_photons;
-    double voxel_T = voxel_host.transmitted_batch.total_weight() / num_photons;
+    double voxel_specular = voxel_result.specular_batch.total_weight() / num_photons;
+    double voxel_R_diffuse = voxel_result.negative_boundary_batch.total_weight() / num_photons;
+    double voxel_T = voxel_result.positive_boundary_batch.total_weight() / num_photons;
     double voxel_R = voxel_specular + voxel_R_diffuse;  // Total reflectance = specular + diffuse
     double voxel_A = 1.0 - voxel_R - voxel_T;
 
@@ -136,8 +133,8 @@ void test_comparison_with_layered_medium() {
     std::cout << "  Transmittance (T): " << voxel_T << std::endl;
     std::cout << "  Other (A): " << voxel_A << std::endl;
     std::cout << "  Specular count: " << voxel_result.specular_batch.size() << std::endl;
-    std::cout << "  Reflected count: " << voxel_host.reflected_batch.size() << std::endl;
-    std::cout << "  Transmitted count: " << voxel_host.transmitted_batch.size() << std::endl;
+    std::cout << "  Reflected count: " << voxel_result.negative_boundary_batch.size() << std::endl;
+    std::cout << "  Transmitted count: " << voxel_result.positive_boundary_batch.size() << std::endl;
     std::cout << "  ⏱️  Runtime: " << voxel_time_ms << " ms" << std::endl;
     std::cout << "  Throughput: " << (num_photons / voxel_time_ms * 1000.0) << " photons/sec" << std::endl;
     std::cout << std::endl;

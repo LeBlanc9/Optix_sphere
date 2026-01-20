@@ -48,7 +48,7 @@ void translate_photons_inplace(
     }
 
     // Get a writeable pointer to the device-side data.
-    float3* pos_ptr = batch.positions_ptr();
+    float3* pos_ptr = batch.positions();
 
     // Launch kernel to translate positions
     const int block_size = 256;

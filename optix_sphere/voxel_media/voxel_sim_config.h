@@ -1,129 +1,107 @@
 #pragma once
 #include <cuda_runtime.h>
+#include <vector>
+#include <cstdint>
+#include <memory>
 #include "photon/sources.h"
+#include "boundary_config.h"
 
 namespace phonder::voxel {
 
 /**
- * @brief Configuration for voxel media simulation
+ * @brief Host-side configuration for voxel media simulation
  *
- * This class holds all parameters needed for simulation.
- * Data is stored as const pointers (non-owning).
+ * All data is owned and stored in std::vector for automatic memory management.
+ * All members are public for direct access from Python.
  */
-class SimConfig {
-public:
-    SimConfig() = default;
+struct SimConfig {
+    // grid[x][y][z] = material_id
+    float3 voxel_size = make_float3(1.0f, 1.0f, 1.0f);
+    std::vector<std::vector<std::vector<uint8_t>>> grid;
+    std::vector<std::vector<float>> materials;
+
+    std::shared_ptr<PhotonSource> source;
+
+    int gpu_id = 0;                   // GPU device ID
+    unsigned long long seed = 0;      // Random seed (0 = auto)
+    bool enable_specular = true;      // Enable specular reflection at entry
+    bool merge_specular = false;      // Merge specular into negative_boundary_batch (saves memory)
+
+    // Boundary photon collection configuration
+    BoundaryCollectionConfig boundary_collection;
 
     /**
-     * @brief Set grid data (material IDs)
-     * @param grid Material ID array, shape: (nx, ny, nz), row-major (z fastest)
-     * @param nx, ny, nz Grid dimensions
-     * @param voxel_size Voxel size in mm (default: 1x1x1)
+     * @brief Get ambient medium refractive index
+     *
+     * By convention, materials[0] represents the ambient medium (outside grid).
+     * The refractive index is stored in materials[0][3].
      */
-    void set_grid(
-        const unsigned char* grid,
-        int nx, int ny, int nz,
-        const float3& voxel_size = make_float3(1.0f, 1.0f, 1.0f)
-    ) {
-        grid_ = grid;
-        nx_ = nx;
-        ny_ = ny;
-        nz_ = nz;
-        dx_ = voxel_size.x;
-        dy_ = voxel_size.y;
-        dz_ = voxel_size.z;
+    float get_ambient_n() const {
+        if (materials.empty() || materials[0].size() < 4) {
+            return 1.0f;  // Default: air
+        }
+        return materials[0][3];  // n is the 4th component
     }
 
     /**
-     * @brief Set material properties table
-     * @param materials Flattened array, shape: (num_materials, 4)
-     *                  Each row: [n, mua, mus, g]
-     * @param num_materials Number of material types
+     * @brief Get grid dimensions
      */
-    void set_materials(const float* materials, int num_materials) {
-        materials_ = materials;
-        num_materials_ = num_materials;
+    int3 get_dims() const {
+        if (grid.empty()) return make_int3(0, 0, 0);
+        int nx = grid.size();
+        int ny = grid[0].empty() ? 0 : grid[0].size();
+        int nz = (ny == 0 || grid[0][0].empty()) ? 0 : grid[0][0].size();
+        return make_int3(nx, ny, nz);
     }
 
     /**
-     * @brief Set light source
+     * @brief Get number of materials
      */
-    void set_source(const PhotonSource& source) {
-        source_ = source;
+    int get_num_materials() const {
+        return materials.size();
     }
 
     /**
-     * @brief Set ambient (outside) refractive index
+     * @brief Get grid center X coordinate
      */
-    void set_ambient_n(float n) { ambient_n_ = n; }
-
-    /**
-     * @brief Set GPU device ID
-     */
-    void set_gpu_id(int id) { gpu_id_ = id; }
-
-    /**
-     * @brief Set random seed (0 = auto-generate)
-     */
-    void set_seed(unsigned long long s) { seed_ = s; }
-
-    /**
-     * @brief Set exit detection boundaries
-     */
-    void set_exit_boundaries(float z_min, float z_max) {
-        exit_z_min_ = z_min;
-        exit_z_max_ = z_max;
+    float get_center_x() const {
+        int nx = grid.size();
+        return nx * voxel_size.x * 0.5f;
     }
 
-    // Getters
-    const unsigned char* get_grid() const { return grid_; }
-    int get_nx() const { return nx_; }
-    int get_ny() const { return ny_; }
-    int get_nz() const { return nz_; }
-    float get_dx() const { return dx_; }
-    float get_dy() const { return dy_; }
-    float get_dz() const { return dz_; }
-    const float* get_materials() const { return materials_; }
-    int get_num_materials() const { return num_materials_; }
-    const PhotonSource& get_source() const { return source_; }
-    float get_ambient_n() const { return ambient_n_; }
-    int get_gpu_id() const { return gpu_id_; }
-    unsigned long long get_seed() const { return seed_; }
-    float get_exit_z_min() const { return exit_z_min_; }
-    float get_exit_z_max() const { return exit_z_max_; }
+    /**
+     * @brief Get grid center Y coordinate
+     */
+    float get_center_y() const {
+        if (grid.empty()) return 0.0f;
+        int ny = grid[0].size();
+        return ny * voxel_size.y * 0.5f;
+    }
 
     /**
      * @brief Validate configuration
      */
     bool is_valid() const {
-        return grid_ != nullptr &&
-               materials_ != nullptr &&
-               nx_ > 0 && ny_ > 0 && nz_ > 0 &&
-               dx_ > 0 && dy_ > 0 && dz_ > 0 &&
-               num_materials_ > 0;
+        if (grid.empty() || materials.empty()) return false;
+        if (voxel_size.x <= 0 || voxel_size.y <= 0 || voxel_size.z <= 0) return false;
+
+        // Check grid is rectangular (all rows have same size)
+        int ny = grid[0].size();
+        int nz = grid[0][0].size();
+        for (const auto& plane : grid) {
+            if (plane.size() != static_cast<size_t>(ny)) return false;
+            for (const auto& row : plane) {
+                if (row.size() != static_cast<size_t>(nz)) return false;
+            }
+        }
+
+        // Check materials have 4 properties each
+        for (const auto& mat : materials) {
+            if (mat.size() != 4) return false;
+        }
+
+        return true;
     }
-
-private:
-    // Grid (non-owning pointers)
-    const unsigned char* grid_ = nullptr;
-    int nx_ = 0, ny_ = 0, nz_ = 0;
-    float dx_ = 1.0f, dy_ = 1.0f, dz_ = 1.0f;
-
-    // Materials (non-owning pointer)
-    const float* materials_ = nullptr;
-    int num_materials_ = 0;
-
-    // Source
-    PhotonSource source_;
-
-    // Options
-    float ambient_n_ = 1.0f;
-    int gpu_id_ = 0;
-    unsigned long long seed_ = 0;
-
-    // Exit detection
-    float exit_z_min_ = -1.0f;
-    float exit_z_max_ = -1.0f;
 };
 
 } // namespace phonder::voxel
