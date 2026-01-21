@@ -3,7 +3,7 @@
 #include "scene/device_scene.h"
 #include "simulation/path_tracer.h" // Now includes launch_from_batch
 #include "embedded_ptx.h"
-#include "geometry/mesh_loader.h" // For MeshLoader::get_default_material_configs
+#include "geometry/obj_loader.h" // For ObjLoader::get_default_material_configs
 #include <spdlog/spdlog.h>
 #include <stdexcept>
 #include <string>

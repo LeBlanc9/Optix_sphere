@@ -1,5 +1,4 @@
-import numpy as np
-import optix_sphere._core as osg
+import optix_sphere as osg
 import time
 import random
 from pathlib import Path

@@ -51,4 +51,28 @@ void bind_types(py::module_ &m) {
 
     py::implicitly_convertible<py::tuple, int3>();
     py::implicitly_convertible<py::list, int3>();
+
+    // uint3
+    py::class_<uint3>(m, "uint3")
+        .def(py::init<unsigned int, unsigned int, unsigned int>())
+        .def(py::init([](py::tuple t) {
+            if (t.size() != 3)
+                throw std::runtime_error("uint3 requires tuple of size 3");
+            return make_uint3(t[0].cast<unsigned int>(), t[1].cast<unsigned int>(), t[2].cast<unsigned int>());
+        }))
+        .def(py::init([](py::list l) {
+            if (l.size() != 3)
+                throw std::runtime_error("uint3 requires list of size 3");
+            return make_uint3(l[0].cast<unsigned int>(), l[1].cast<unsigned int>(), l[2].cast<unsigned int>());
+        }))
+        .def_readwrite("x", &uint3::x)
+        .def_readwrite("y", &uint3::y)
+        .def_readwrite("z", &uint3::z)
+        .def("__repr__", [](const uint3 &v) {
+            return "uint3(" + std::to_string(v.x) + ", " +
+                   std::to_string(v.y) + ", " + std::to_string(v.z) + ")";
+        });
+
+    py::implicitly_convertible<py::tuple, uint3>();
+    py::implicitly_convertible<py::list, uint3>();
 }

@@ -3,7 +3,7 @@
 #include "simulation/optix_context.h"
 #include "utils/device/device_buffer.cuh"
 #include "simulation/device_params.h"
-#include "geometry/mesh_loader.h"
+#include "geometry/obj_loader.h"
 #include "material.h"
 #include <vector>
 #include <memory>

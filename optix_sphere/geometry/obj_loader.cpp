@@ -1,14 +1,14 @@
-#include "mesh_loader.h"
+#include "obj_loader.h"
 #include <tiny_obj_loader.h>
 #include <spdlog/spdlog.h>
 #include <stdexcept>
 #include <map>
 
-std::map<std::string, MaterialFactory> MeshLoader::get_default_materials() {
+std::map<std::string, MaterialFactory> ObjLoader::get_default_materials() {
     return material::get_default_materials();
 }
 
-Mesh MeshLoader::load_obj(const std::string& filepath) {
+Mesh ObjLoader::load_obj(const std::string& filepath) {
     spdlog::info("Loading OBJ file: {}", filepath);
 
     tinyobj::attrib_t attrib;

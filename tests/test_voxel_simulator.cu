@@ -37,6 +37,8 @@ void test_comparison_with_layered_medium() {
     MediaSimConfig layered_config;
     layered_config.medium = layered_medium;
     layered_config.source = layered_source;
+    layered_config.reflected_radius = 2;
+    layered_config.transmitted_radius = 2;
 
     MediaSimulator layered_sim(layered_config);
 
@@ -103,6 +105,8 @@ void test_comparison_with_layered_medium() {
     
 
     voxel_config.boundary_collection.enable_z_faces();
+    voxel_config.boundary_collection.set_positive_radius(2.0f);
+    voxel_config.boundary_collection.set_negative_radius(2.0f);
 
     // Debug: print boundary collection config
     std::cout << "Boundary collection: " << voxel_config.boundary_collection.to_string() << std::endl;

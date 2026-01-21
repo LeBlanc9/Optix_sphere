@@ -1,4 +1,4 @@
-import optix_sphere._core as osg
+import optix_sphere as osg
 from pathlib import Path
 import time
 import os
@@ -9,15 +9,13 @@ def main():
     osg.set_log_level(osg.LogLevel.WARN)
 
 
-    # --- Configuration (Hardcoded as per user's request) ---
     sim_config = osg.SimConfig()
     sim_config.num_rays = 2_000_000
     sim_config.max_bounces = 500
     sim_config.use_nee = True
 
     source = osg.IsotropicPointSource()
-    source.position = osg.float3(0, 0, 0)
-    source.weight = 1.0
+    source.position = (0, 0, 0)
 
     materials = {}
     # materials["wall_material"] = osg.material.mixed(0.7, 0.3, 0.99)

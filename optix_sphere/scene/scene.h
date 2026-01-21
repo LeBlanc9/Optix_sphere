@@ -1,6 +1,6 @@
 #pragma once
 
-#include "geometry/mesh_loader.h"
+#include "geometry/obj_loader.h"
 #include <cuda_runtime.h>
 #include <vector>
 #include <string>
@@ -77,6 +77,86 @@ public:
      * @return Reference to the loaded mesh
      */
     const Mesh& get_mesh() const { return mesh_; }
+
+    /**
+     * @brief Rotate the entire scene around Y-axis
+     * @param angle_degrees Rotation angle in degrees (positive = counter-clockwise from top view)
+     *
+     * @example
+     * ```cpp
+     * Scene scene = Scene::from_obj("sphere.obj");
+     * scene.rotate_y(180.0f);  // Flip around Y-axis
+     * ```
+     */
+    void rotate_y(float angle_degrees);
+
+    /**
+     * @brief Translate the entire scene
+     * @param offset Translation vector (x, y, z) in mm
+     *
+     * @example
+     * ```cpp
+     * Scene scene = Scene::from_obj("sphere.obj");
+     * scene.translate(make_float3(10.0f, 0.0f, 0.0f));  // Move 10mm in X direction
+     * ```
+     */
+    void translate(const float3& offset);
+
+    /**
+     * @brief Scale the entire scene uniformly
+     * @param scale_factor Scaling factor (1.0 = no change, 2.0 = double size)
+     */
+    void scale(float scale_factor);
+
+    /**
+     * @brief Get number of triangles with a specific material
+     * @param material_name Material name to query
+     * @return Number of triangles using this material, or 0 if material not found
+     *
+     * @example
+     * ```cpp
+     * Scene scene = Scene::from_obj("sphere.obj");
+     * size_t wall_triangles = scene.get_triangle_count_by_material("wall_material");
+     * size_t detector_triangles = scene.get_triangle_count_by_material("detector_material");
+     * ```
+     */
+    size_t get_triangle_count_by_material(const std::string& material_name) const {
+        return mesh_.get_triangle_count_by_material(material_name);
+    }
+
+    /**
+     * @brief Get number of unique vertices used by triangles with a specific material
+     * @param material_name Material name to query
+     * @return Number of unique vertices used by this material, or 0 if material not found
+     *
+     * Note: This counts unique vertex indices referenced by triangles of this material.
+     * A vertex shared between multiple materials will be counted for each material.
+     *
+     * @example
+     * ```cpp
+     * Scene scene = Scene::from_obj("sphere.obj");
+     * size_t detector_vertices = scene.get_vertex_count_by_material("detector_material");
+     * ```
+     */
+    size_t get_vertex_count_by_material(const std::string& material_name) const {
+        return mesh_.get_vertex_count_by_material(material_name);
+    }
+
+    /**
+     * @brief Get all triangle indices that use a specific material
+     * @param material_name Material name to query
+     * @return Vector of triangle indices (0-based), empty if material not found
+     *
+     * @example
+     * ```cpp
+     * Scene scene = Scene::from_obj("sphere.obj");
+     * auto detector_triangles = scene.get_triangle_indices_by_material("detector_material");
+     * // detector_triangles[0] is the first triangle using detector_material
+     * ```
+     */
+    std::vector<size_t> get_triangle_indices_by_material(const std::string& material_name) const {
+        return mesh_.get_triangle_indices_by_material(material_name);
+    }
 
 private:
     Mesh mesh_;

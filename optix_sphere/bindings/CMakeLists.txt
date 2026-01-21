@@ -25,37 +25,27 @@ target_link_libraries(_core PRIVATE
 target_compile_definitions(_core PRIVATE FMT_UNICODE=0)
 
 if(SKBUILD)
-    install(TARGETS _core LIBRARY DESTINATION ${SKBUILD_PLATLIB_DIR}/optix_sphere)
-
     message(STATUS "Configuring pybind11-stubgen to generate type stubs...")
 
-    install(CODE "
-        message(STATUS \"Generating Python stub files for optix_sphere._core...\")
+    # Generate stubs right after building _core.so
+    add_custom_command(
+        TARGET _core POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E echo "Generating Python stub files next to _core.so..."
+        COMMAND "${Python3_EXECUTABLE}" -m pybind11_stubgen
+            _core
+            -o "${CMAKE_CURRENT_BINARY_DIR}"
+            --ignore-all-errors
+        WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+        COMMENT "Generating type stubs for _core module"
+        VERBATIM
+    )
 
-        # Set PYTHONPATH to include the installation directory
-        set(ENV{PYTHONPATH} \"${SKBUILD_PLATLIB_DIR}:\$ENV{PYTHONPATH}\")
-
-        execute_process(
-            COMMAND \"${Python3_EXECUTABLE}\" -m pybind11_stubgen
-                optix_sphere._core
-                -o \"${CMAKE_CURRENT_BINARY_DIR}/stubs\"
-                --ignore-all-errors
-            WORKING_DIRECTORY \"${CMAKE_CURRENT_BINARY_DIR}\"
-            RESULT_VARIABLE STUBGEN_RESULT
-            OUTPUT_VARIABLE STUBGEN_OUTPUT
-            ERROR_VARIABLE STUBGEN_ERROR
-        )
-
-        if(NOT STUBGEN_RESULT EQUAL 0)
-            message(WARNING \"pybind11-stubgen failed: \${STUBGEN_ERROR}\")
-        else()
-            message(STATUS \"Successfully generated stub files\")
-        endif()
-    ")
+    # Install _core.so to site-packages
+    install(TARGETS _core LIBRARY DESTINATION ${SKBUILD_PLATLIB_DIR}/optix_sphere)
 
     # Install generated stub files if they exist
     install(
-        DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/stubs/optix_sphere/
+        DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/_core/
         DESTINATION ${SKBUILD_PLATLIB_DIR}/optix_sphere
         OPTIONAL
         FILES_MATCHING

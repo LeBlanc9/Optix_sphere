@@ -173,7 +173,8 @@ add_library(sphere STATIC
     optix_sphere/simulation/path_tracer.cu
     optix_sphere/simulation/optix_pipeline_builder.cpp
     optix_sphere/simulation/optix_sbt_builder.cpp
-    optix_sphere/geometry/mesh_loader.cpp
+    optix_sphere/geometry/obj_loader.cpp
+    optix_sphere/geometry/mesh.cpp
     optix_sphere/theory/theory.cpp
     optix_sphere/material.cpp
     optix_sphere/simulator.cpp

@@ -6,7 +6,7 @@ Demonstrates how to quickly update material parameters (like reflectance)
 without rebuilding the expensive BVH geometry structure.
 """
 
-import optix_sphere._core as osg
+import optix_sphere as osg
 from pathlib import Path
 import time
 
