@@ -43,7 +43,7 @@ Example:
 from . import _core
 
 # Import Python submodules
-from . import visualization
+from . import viewer
 
 # ============================================================================
 # Core Classes
@@ -109,48 +109,87 @@ material = _core.material
 TheoryResult = _core.TheoryResult
 
 # ============================================================================
+# Logging
+# ============================================================================
+
+set_log_level = _core.set_log_level
+LogLevel = _core.LogLevel
+
+# ============================================================================
 # Metadata
 # ============================================================================
 
 __version__ = _core.__version__
 
+# ============================================================================
+# Auto-import all public symbols from _core
+# ============================================================================
+
+def _import_all_from_core():
+    """
+    Automatically import all public symbols from _core module.
+
+    This function inspects the _core module and imports all symbols that:
+    - Don't start with underscore (public API)
+    - Aren't already explicitly imported above
+
+    This ensures that new additions to the C++ bindings are automatically
+    available without manually updating this file.
+    """
+    import sys
+    current_module = sys.modules[__name__]
+
+    # Get all public symbols from _core
+    for name in dir(_core):
+        # Skip private symbols
+        if name.startswith('_'):
+            continue
+
+        # Skip if already imported
+        if hasattr(current_module, name):
+            continue
+
+        # Import the symbol
+        setattr(current_module, name, getattr(_core, name))
+
+# Execute auto-import
+_import_all_from_core()
+
+# Build __all__ dynamically
 __all__ = [
-    # Scene
+    # Explicitly listed core classes
     "Scene",
     "Mesh",
-
-    # Simulation
     "Simulator",
     "SimConfig",
     "SimulationResult",
-
-    # Photon System
     "PhotonBatch",
     "HostPhotonBatch",
     "generate_photons",
     "translate_photons",
     "translate_photons_inplace",
-
-    # Photon Sources
     "CollimatedBeamSource",
     "SpotSource",
     "IsotropicPointSource",
     "GaussianBeamSource",
     "FocusedSpotSource",
-
-    # Media and Voxel (namespaces)
     "media",
     "voxel",
-
-    # Types
     "float3",
     "int3",
     "uint3",
-
-    # Material
     "material",
-
-    # Theory
     "TheoryResult",
+    "set_log_level",
+    "LogLevel",
+
+    # Python submodules
+    "viewer",
 ]
+
+# Add all auto-imported symbols to __all__
+__all__.extend([
+    name for name in dir(_core)
+    if not name.startswith('_') and name not in __all__
+])
 

@@ -101,6 +101,7 @@ struct DeviceParams {
     unsigned int max_bounces;
     double power_per_ray;
     bool use_nee;           // 是否启用Next Event Estimation (NEE) 方差优化
+    unsigned int num_materials;  // Number of materials in the scene (for dynamic SBT offset calculation)
 
     // Data-driven mode (SoA format for GPU efficiency)
     // 当这些指针非空时，raygen 从外部光源数据读取

@@ -67,11 +67,12 @@ void OptixSBTBuilder::create_hitgroup_records(
     const DeviceScene& scene)
 {
     // Data-driven SBT construction using material polymorphism
-    // SBT layout: [mat0_radiance, mat1_radiance, mat2_radiance, mat3_radiance,
-    //              mat0_shadow, mat1_shadow, mat2_shadow, mat3_shadow]
-    // Radiance rays use offset 0-3, shadow rays use offset 4-7 with stride 1
+    // SBT layout: [mat0_radiance, mat1_radiance, ..., matN_radiance,
+    //              mat0_shadow, mat1_shadow, ..., matN_shadow]
+    // Radiance rays use offset 0-(N-1), shadow rays use offset N-(2N-1) with stride 1
 
     const auto& materials = scene.get_materials();
+    size_t num_materials = materials.size();
 
     // Calculate maximum record size for all materials
     size_t max_record_size = OPTIX_SBT_RECORD_HEADER_SIZE;
@@ -88,10 +89,10 @@ void OptixSBTBuilder::create_hitgroup_records(
     size_t aligned_record_size = ((max_record_size + OPTIX_SBT_RECORD_ALIGNMENT - 1) /
                                   OPTIX_SBT_RECORD_ALIGNMENT) * OPTIX_SBT_RECORD_ALIGNMENT;
 
-    // Allocate space for 8 records (4 radiance + 4 shadow)
-    hitgroup_sbt_records_.alloc(8 * aligned_record_size);
+    // Allocate space for (num_materials * 2) records (N radiance + N shadow)
+    hitgroup_sbt_records_.alloc(num_materials * 2 * aligned_record_size);
 
-    // Create radiance ray records (indices 0-3)
+    // Create radiance ray records (indices 0 to num_materials-1)
     std::vector<char> host_sbt_data(aligned_record_size);
 
     for (size_t i = 0; i < materials.size(); ++i) {
@@ -128,7 +129,7 @@ void OptixSBTBuilder::create_hitgroup_records(
         ));
     }
 
-    // Create shadow ray records (indices 4-7)
+    // Create shadow ray records (indices num_materials to 2*num_materials-1)
     // Shadow records only need headers (no material data)
     for (size_t i = 0; i < materials.size(); ++i) {
         if (!materials[i]) continue;
@@ -146,7 +147,7 @@ void OptixSBTBuilder::create_hitgroup_records(
         char shadow_header[OPTIX_SBT_RECORD_HEADER_SIZE];
         OPTIX_CHECK(optixSbtRecordPackHeader(shadow_pg, &shadow_header));
 
-        CUdeviceptr shadow_ptr = hitgroup_sbt_records_.get_cu_ptr() + (4 + i) * aligned_record_size;
+        CUdeviceptr shadow_ptr = hitgroup_sbt_records_.get_cu_ptr() + (num_materials + i) * aligned_record_size;
         CUDA_CHECK(cudaMemcpy(
             (void*)shadow_ptr,
             &shadow_header,
@@ -158,5 +159,5 @@ void OptixSBTBuilder::create_hitgroup_records(
     // Point SBT to the records
     sbt_.hitgroupRecordBase = hitgroup_sbt_records_.get_cu_ptr();
     sbt_.hitgroupRecordStrideInBytes = aligned_record_size;
-    sbt_.hitgroupRecordCount = 8;  // 4 radiance + 4 shadow
+    sbt_.hitgroupRecordCount = num_materials * 2;  // N radiance + N shadow
 }

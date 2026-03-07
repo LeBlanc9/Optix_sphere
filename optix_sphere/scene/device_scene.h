@@ -7,41 +7,42 @@
 #include "material.h"
 #include <vector>
 #include <memory>
-#include <limits>
-#include <algorithm>
+#include <map>
 
 /**
- * @brief Manages the GPU scene geometry and acceleration structures.
- *
- * This class is responsible for loading triangle mesh scenes and building
- * the OptiX Geometry Acceleration Structure (GAS) required for tracing.
- * It uses a polymorphic material system to manage different surface types.
+ * @brief Manages the GPU scene geometry and acceleration structures
  */
 class DeviceScene {
 public:
     DeviceScene(const OptixContext& context);
 
     /**
-     * Build GPU acceleration structures from loaded mesh data
+     * Build GPU acceleration structures from mesh with material pool
      * @param mesh Pure geometry data with material names
-     * @param material_factories Map from material names to material factory functions
+     * @param material_pool Vector of material instances
+     * @param material_mapping Map from mesh material names to pool indices
      */
     void build(
         const Mesh& mesh,
-        const std::map<std::string, MaterialFactory>& material_factories
+        const std::vector<std::shared_ptr<Material>>& material_pool,
+        const std::map<std::string, size_t>& material_mapping
     );
+
+    /**
+     * Update materials from pool (fast path, no GAS rebuild)
+     * @param material_pool Updated material pool
+     */
+    void update_from_pool(const std::vector<std::shared_ptr<Material>>& material_pool);
 
     OptixTraversableHandle get_traversable() const { return traversable_; }
 
     /**
      * Get materials for SBT construction
-     * Returns vector of materials in order corresponding to MaterialType enum
      */
     const std::vector<std::shared_ptr<Material>>& get_materials() const { return materials_; }
 
     /**
-     * Get detector parameters extracted from mesh
-     * These are used for NEE (Next Event Estimation)
+     * Get detector parameters for NEE
      */
     float3 get_detector_position() const { return detector_position_; }
     float3 get_detector_normal() const { return detector_normal_; }
@@ -49,8 +50,16 @@ public:
     float get_detector_total_area() const { return detector_total_area_; }
 
     /**
+     * Flip the detector normal direction
+     */
+    void flip_detector_normal() {
+        detector_normal_.x = -detector_normal_.x;
+        detector_normal_.y = -detector_normal_.y;
+        detector_normal_.z = -detector_normal_.z;
+    }
+
+    /**
      * Get vertex and index buffers for triangle normal calculation
-     * These are used in closest-hit shaders to compute geometric normals
      */
     const float3* get_vertex_buffer_ptr() const {
         return reinterpret_cast<const float3*>(vertex_buffer_.get_cu_ptr());
@@ -58,30 +67,6 @@ public:
     const uint3* get_index_buffer_ptr() const {
         return reinterpret_cast<const uint3*>(index_buffer_.get_cu_ptr());
     }
-
-    /**
-     * Update a single material without rebuilding the scene geometry
-     * Fast operation that only updates material parameters and SBT
-     * @param name Material name to update
-     * @param factory MaterialFactory function to create new material instance
-     * @throws std::runtime_error if material name not found
-     *
-     * @example
-     * ```cpp
-     * // Update wall material with new reflectance
-     * scene.update_material("wall_material", material::lambertian(0.98));
-     * ```
-     */
-    void update_material(
-        const std::string& name,
-        const MaterialFactory& factory
-    );
-
-    /**
-     * Get material names registered in the scene
-     * @return Vector of material names
-     */
-    std::vector<std::string> get_material_names() const;
 
 private:
     const OptixContext& context_;
@@ -94,13 +79,16 @@ private:
     DeviceBuffer vertex_buffer_;
     DeviceBuffer index_buffer_;
 
-    // Material system - polymorphic materials for different surface types
+    // Material system - references to material pool
     std::vector<std::shared_ptr<Material>> materials_;
 
-    // Material name to index mapping (for fast material updates)
-    std::map<std::string, size_t> material_name_to_index_;
+    // Material mapping (mesh name -> pool index)
+    std::map<std::string, size_t> material_mapping_;
 
-    // Extracted detector parameters (from mesh) for NEE
+    // Mesh material names (in order) - needed for update_from_pool
+    std::vector<std::string> mesh_material_names_;
+
+    // Extracted detector parameters for NEE
     float3 detector_position_ = {0, 0, 0};
     float3 detector_normal_ = {0, 0, 0};
     float detector_radius_ = 0.0f;

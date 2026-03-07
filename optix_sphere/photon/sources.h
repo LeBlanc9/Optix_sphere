@@ -59,9 +59,19 @@ class FocusedSpotSource : public PhotonSource {
 public:
     float3 spot_center = {0, 0, 0};
     float spot_radius = 1.0f;
+    float3 disk_normal = {0, 0, 1};
     float convergence_half_angle_rad = 0.1f;
     float3 main_axis = {0, 0, 1};
-    float source_distance = 10.0f;
+
+    void generate(PhotonBatch& batch, int num_photons, unsigned long long seed) const override;
+};
+
+// Lambertian disk source (cosine-weighted hemisphere emission)
+class LambertianDiskSource : public PhotonSource {
+public:
+    float3 center_position = {0, 0, 0};
+    float3 disk_normal = {0, 0, 1};  // Direction of surface normal (hemisphere orientation)
+    float radius = 1.0f;
 
     void generate(PhotonBatch& batch, int num_photons, unsigned long long seed) const override;
 };

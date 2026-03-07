@@ -37,9 +37,6 @@ Mesh ObjLoader::load_obj(const std::string& filepath) {
         throw std::runtime_error("Failed to load OBJ file: " + filepath);
     }
 
-    spdlog::info("✅ Loaded OBJ: {} vertices, {} shapes, {} materials",
-                 attrib.vertices.size() / 3, shapes.size(), materials.size());
-
     Mesh mesh;
 
     // Build material name list and index mapping
@@ -134,23 +131,6 @@ Mesh ObjLoader::load_obj(const std::string& filepath) {
             mesh.triangle_materials.push_back(mat_index);
 
             index_offset += fv;
-        }
-    }
-
-    spdlog::info("✅ Processed mesh: {} vertices, {} triangles, {} materials",
-                 mesh.vertices.size(), mesh.indices.size(), mesh.material_names.size());
-
-    // 统计各材质的三角形数量
-    std::map<int, int> mat_counts;
-    for (int mat_idx : mesh.triangle_materials) {
-        mat_counts[mat_idx]++;
-    }
-
-    spdlog::info("Material distribution:");
-    for (const auto& [mat_idx, count] : mat_counts) {
-        if (mat_idx < static_cast<int>(mesh.material_names.size())) {
-            const std::string& name = mesh.material_names[mat_idx];
-            spdlog::info("  [{}] {}: {} triangles", mat_idx, name, count);
         }
     }
 

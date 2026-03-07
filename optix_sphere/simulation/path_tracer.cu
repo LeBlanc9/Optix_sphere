@@ -93,6 +93,7 @@ SimulationResult PathTracer::launch_from_batch(
     params.max_bounces = config.max_bounces;
     params.power_per_ray = 1.0; // The power of each ray is carried in its weight
     params.use_nee = config.use_nee;
+    params.num_materials = scene_.get_materials().size();
 
     // Data-driven mode: Get const device pointers directly (zero-copy)
     params.photon_positions = input_batch.positions();

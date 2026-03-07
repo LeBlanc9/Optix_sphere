@@ -169,6 +169,7 @@ message(STATUS "Library 'voxel_media' configured.")
 add_library(sphere STATIC
     optix_sphere/simulation/optix_context.cpp
     optix_sphere/scene/scene.cpp
+    optix_sphere/scene/scene_node.cpp
     optix_sphere/scene/device_scene.cpp
     optix_sphere/simulation/path_tracer.cu
     optix_sphere/simulation/optix_pipeline_builder.cpp
@@ -193,10 +194,12 @@ target_include_directories(sphere PUBLIC
 )
 target_link_libraries(sphere PUBLIC
     photon
-    spdlog::spdlog
-    tinyobjloader
     ${CMAKE_DL_LIBS}
     CUDA::cudart
+)
+target_link_libraries(sphere PRIVATE
+    spdlog::spdlog
+    tinyobjloader
 )
 message(STATUS "Library 'sphere' configured, depends on 'photon'.")
 target_compile_definitions(sphere PRIVATE FMT_UNICODE=0)
@@ -217,6 +220,7 @@ else()
     target_link_libraries(main_test PRIVATE
         sphere
         media
+        spdlog::spdlog
     )
     add_test(NAME IntegrationTest COMMAND main_test)
 

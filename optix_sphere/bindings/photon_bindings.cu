@@ -88,16 +88,28 @@ void bind_photon(py::module_ &m) {
     py::class_<FocusedSpotSource, PhotonSource, std::shared_ptr<FocusedSpotSource>>(m, "FocusedSpotSource")
         .def(py::init<>())
         .def_readwrite("spot_center", &FocusedSpotSource::spot_center,
-                       "Target spot center (float3)")
+                       "Disk center position (float3)")
         .def_readwrite("spot_radius", &FocusedSpotSource::spot_radius,
-                       "Target spot radius (mm)")
+                       "Disk radius (mm)")
+        .def_readwrite("disk_normal", &FocusedSpotSource::disk_normal,
+                       "Disk normal direction (float3)")
         .def_readwrite("convergence_half_angle_rad", &FocusedSpotSource::convergence_half_angle_rad,
-                       "Convergence half angle (radians)")
+                       "Cone half angle for direction distribution (radians)")
         .def_readwrite("main_axis", &FocusedSpotSource::main_axis,
-                       "Main optical axis (float3)")
-        .def_readwrite("source_distance", &FocusedSpotSource::source_distance,
-                       "Distance from source to spot (mm)")
+                       "Main direction axis for cone distribution (float3)")
         .def_readwrite("weight", &FocusedSpotSource::weight,
+                       "Photon weight");
+
+    // LambertianDiskSource
+    py::class_<LambertianDiskSource, PhotonSource, std::shared_ptr<LambertianDiskSource>>(m, "LambertianDiskSource")
+        .def(py::init<>())
+        .def_readwrite("center_position", &LambertianDiskSource::center_position,
+                       "Disk center position (float3)")
+        .def_readwrite("disk_normal", &LambertianDiskSource::disk_normal,
+                       "Disk normal / hemisphere orientation (float3)")
+        .def_readwrite("radius", &LambertianDiskSource::radius,
+                       "Disk radius (mm)")
+        .def_readwrite("weight", &LambertianDiskSource::weight,
                        "Photon weight");
 
     // Convenience function for generating photons

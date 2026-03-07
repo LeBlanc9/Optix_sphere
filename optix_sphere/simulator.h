@@ -3,118 +3,127 @@
 #include <string>
 #include <memory>
 #include <map>
-#include "scene/scene.h"   // For Scene
-#include "photon/sources.h"    // Data-only source definitions
-#include "photon/photon_batch.h"      // For PhotonBatch
+#include <vector>
+#include "scene/scene.h"
+#include "photon/sources.h"
+#include "photon/photon_batch.h"
 #include "simulation/simulation_result.h"
-#include "material.h"          // For MaterialDescriptor
-
+#include "material.h"
 
 /**
  * @brief 仿真运行配置参数
  */
 struct SimConfig {
-    int num_rays = 1'000'000;   ///< 要追踪的光线数量
-    int max_bounces = 50;       ///< 最大反弹次数
-    bool use_nee = false;       ///< 是否启用Next Event Estimation (默认关闭)
-    unsigned int random_seed = 0; ///< 随机数种子 (0 = 使用时间，非0 = 固定种子)
+    int num_rays = 1'000'000;
+    int max_bounces = 50;
+    bool use_nee = false;
+    unsigned int random_seed = 0;
 };
 
-
 /**
- * @brief 统一的仿真器接口 (API v2).
- *
- * 封装了OptiX上下文、场景和路径追踪器。
- * 支持从文件加载场景或程序化创建理想场景。
+ * @brief 统一的仿真器接口
  */
 class Simulator {
 public:
     /**
-     * @brief 构造函数，初始化仿真器核心组件。
-     * @param device_id CUDA 设备 ID (默认 0)。
+     * @brief 构造函数
+     * @param device_id CUDA 设备 ID (默认 0)
      */
     explicit Simulator(int device_id = 0);
-
-    /**
-     * @brief 析构函数。
-     */
     ~Simulator();
 
-    // --- Scene Building Methods ---
+    /**
+     * @brief 仿真配置参数（可直接修改）
+     */
+    SimConfig config;
 
     /**
-     * @brief 从Scene构建GPU场景
-     *
-     * 将独立创建的Scene构建为GPU加速结构。
+     * @brief 添加材质到材质池
+     * @param material 材质实例
+     * @return 材质在池中的索引
+     */
+    size_t add_material(std::shared_ptr<Material> material);
+
+    /**
+     * @brief 设置指定索引的材质
+     * @param index 材质索引
+     * @param material 新的材质实例
+     */
+    void set_material(size_t index, std::shared_ptr<Material> material);
+
+    /**
+     * @brief 获取材质池大小
+     */
+    size_t get_material_pool_size() const;
+
+    /**
+     * @brief 获取指定索引的材质
+     */
+    std::shared_ptr<Material> get_material(size_t index) const;
+
+    /**
+     * @brief 清空材质池
+     */
+    void clear_materials();
+
+    /**
+     * @brief 从Scene构建GPU场景（使用材质池）
      *
      * @param scene CPU端场景数据
-     * @param material_factories 材质名称到 MaterialFactory 的映射
+     * @param material_mapping mesh材质名称 -> material_pool索引的映射
+     * @param flip_detector_normal 是否翻转探测器法向 (默认 false)
      *
      * @example
      * ```cpp
-     * // 创建CPU场景
-     * Scene scene = Scene::from_obj("sphere.obj");
-     *
-     * // 准备材质工厂
-     * std::map<std::string, MaterialFactory> materials;
-     * materials["wall"] = material::lambertian(0.98);
-     * materials["detector"] = material::detector();
-     *
-     * // 构建GPU场景
      * Simulator sim;
-     * sim.build_scene(scene, materials);
+     *
+     * // 设置材质池
+     * sim.material_pool.push_back(material::lambertian(0.98));  // 0
+     * sim.material_pool.push_back(material::detector());        // 1
+     *
+     * // 材质名称映射到池索引
+     * std::map<std::string, size_t> mapping;
+     * mapping["wall_left"] = 0;
+     * mapping["wall_right"] = 0;
+     * mapping["detector"] = 1;
+     *
+     * sim.build_scene(scene, mapping);
      * ```
      */
     void build_scene(
         const Scene& scene,
-        const std::map<std::string, MaterialFactory>& material_factories
+        const std::map<std::string, size_t>& material_mapping,
+        bool flip_detector_normal = false
     );
 
-
-    // --- Simulation Execution ---
-
     /**
-     * @brief 运行蒙特卡洛仿真。
-     *        光子源通过数学描述在GPU上生成。
-     * @param procedural_source 光子源的数学描述 (例如 IsotropicPointSource, CollimatedBeamSource等)。
-     * @param config 通用的仿真运行配置 (光线数、反弹次数等)。
-     * @return 仿真结果。
-     */
-    SimulationResult run(phonder::PhotonSource& procedural_source, const SimConfig& config);
-
-    /**
-     * @brief 运行蒙特卡洛仿真。
-     *        使用一个预先在GPU上生成的光子批次作为输入。
-     * @param source_batch 预先在GPU上的光子批次。
-     * @param config 通用的仿真运行配置 (光线数、反弹次数等)。
-     * @return 仿真结果。
-     */
-    SimulationResult run(const phonder::PhotonBatch& source_batch, const SimConfig& config);
-
-
-    /**
-     * @brief 获取当前场景中探测器的总面积 (mm²)。
-     * @return 探测器面积。如果场景未构建则抛出异常。
-     */
-    float get_detector_total_area() const;
-
-    /**
-     * @brief 更新单个材质参数（不重建几何结构）
+     * @brief 更新材质到GPU（不重建几何结构）
      *
-     * @param name 要更新的材质名称（必须在场景中已存在）
-     * @param factory MaterialFactory 函数，用于创建新的材质实例
-     * @throws std::runtime_error 如果材质名称未找到或场景未构建
+     * 在修改 material_pool 后调用此方法同步到 GPU
      *
      * @example
      * ```cpp
-     * // 更新墙面材质的反射率
-     * simulator.update_material("wall_material", material::lambertian(0.95));
-     * simulator.run(source, config);  // 自动使用新材质
+     * sim.material_pool[0] = material::lambertian(0.95);
+     * sim.update_materials();  // 同步到 GPU
      * ```
      */
-    void update_material(const std::string& name, const MaterialFactory& factory);
+    void update_materials();
+
+    /**
+     * @brief 运行蒙特卡洛仿真
+     */
+    SimulationResult run(phonder::PhotonSource& procedural_source);
+    SimulationResult run(const phonder::PhotonBatch& source_batch);
+
+    /**
+     * @brief 获取探测器总面积 (mm²)
+     */
+    float get_detector_total_area() const;
 
 private:
     class Pimpl;
     std::unique_ptr<Pimpl> pimpl_;
+
+    // 材质池（私有）
+    std::vector<std::shared_ptr<Material>> material_pool_;
 };

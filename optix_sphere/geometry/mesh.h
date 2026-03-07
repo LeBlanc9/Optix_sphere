@@ -2,13 +2,11 @@
 
 #include <string>
 #include <vector>
+#include <map>
 #include <cuda_runtime.h>
 
 /**
  * @brief Triangle mesh with material information
- *
- * This structure contains pure geometric data and material name references.
- * Material factories are bound later during GPU scene build.
  */
 struct Mesh {
     std::vector<float3> vertices;           // Vertex positions
@@ -17,54 +15,60 @@ struct Mesh {
     std::vector<int> triangle_materials;    // Material index per triangle (index into material_names)
     std::vector<std::string> material_names; // Material name list (e.g., ["wall", "detector", ...])
 
+    // Constructors
+    Mesh() = default;
+    Mesh(const Mesh&) = default;
+    Mesh(Mesh&&) = default;
+    Mesh& operator=(const Mesh&) = default;
+    Mesh& operator=(Mesh&&) = default;
+
+    static Mesh from_obj(const std::string& file_path);
+
     // ========================================================================
     // Basic Statistics
     // ========================================================================
 
-    /**
-     * @brief Get number of triangles in the mesh
-     * @return Triangle count
-     */
     size_t get_triangle_count() const { return indices.size(); }
 
-    /**
-     * @brief Get number of vertices in the mesh
-     * @return Vertex count
-     */
     size_t get_vertex_count() const { return vertices.size(); }
 
-    /**
-     * @brief Get number of materials in the mesh
-     * @return Material count
-     */
     size_t get_material_count() const { return material_names.size(); }
+
+    std::pair<float3, float3> get_bounds() const;
 
     // ========================================================================
     // Material-based Queries
     // ========================================================================
 
-    /**
-     * @brief Get number of triangles with a specific material
-     * @param material_name Material name to query
-     * @return Number of triangles using this material, or 0 if material not found
-     */
-    size_t get_triangle_count_by_material(const std::string& material_name) const;
+   size_t get_triangle_count_by_material(const std::string& material_name) const;
 
-    /**
-     * @brief Get number of unique vertices used by triangles with a specific material
-     * @param material_name Material name to query
-     * @return Number of unique vertices used by this material, or 0 if material not found
-     *
-     * Note: A vertex shared between multiple materials will be counted for each material.
-     */
-    size_t get_vertex_count_by_material(const std::string& material_name) const;
+   size_t get_vertex_count_by_material(const std::string& material_name) const;
 
-    /**
-     * @brief Get all triangle indices that use a specific material
-     * @param material_name Material name to query
-     * @return Vector of triangle indices (0-based), empty if material not found
-     */
-    std::vector<size_t> get_triangle_indices_by_material(const std::string& material_name) const;
+    // ========================================================================
+    // Mesh Splitting
+    // ========================================================================
+
+    std::map<std::string, Mesh> split_by_material() const;
+
+    Mesh extract_mesh_by_material(const std::string& material_name) const;
+
+    void remove_mesh_by_material(const std::string& material_name);
+
+    // ========================================================================
+    // Transformation
+    // ========================================================================
+
+    void translate(const float3& offset);
+
+    void rotate_y(float angle_degrees);
+
+    void scale(float factor);
+
+    // ========================================================================
+    // Debugging and Statistics
+    // ========================================================================
+
+    void info() const;
 
 private:
     /**

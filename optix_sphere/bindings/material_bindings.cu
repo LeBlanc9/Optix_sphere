@@ -18,32 +18,96 @@ void bind_material(py::module_ &m) {
 
     py::module_ material_module = m.def_submodule("material", "Material factory functions for creating custom materials");
 
-    material_module.def("lambertian", &material::lambertian, py::arg("reflectance"),
-                        "Create a Lambertian (purely diffuse) material factory.");
+    // Python 侧直接返回材质实例（自动调用 C++ factory）
+    material_module.def("lambertian",
+        [](float reflectance) {
+            return material::lambertian(reflectance)();  // 调用 factory 得到实例
+        },
+        py::arg("reflectance"),
+        "Create a Lambertian (purely diffuse) material.\n\n"
+        "Args:\n"
+        "    reflectance (float): Surface reflectance [0, 1]\n\n"
+        "Returns:\n"
+        "    Material: Lambertian material instance\n\n"
+        "Example:\n"
+        "    >>> mat = osg.material.lambertian(0.98)\n"
+        "    >>> sim.material_pool.append(mat)\n");
 
-    material_module.def("mixed", &material::mixed,
-                        py::arg("diffuse_ratio"),
-                        py::arg("specular_ratio"),
-                        py::arg("reflectance"),
-                        "Create a mixed (diffuse + specular) material factory.");
+    material_module.def("mixed",
+        [](float diffuse_ratio, float specular_ratio, float reflectance) {
+            return material::mixed(diffuse_ratio, specular_ratio, reflectance)();
+        },
+        py::arg("diffuse_ratio"),
+        py::arg("specular_ratio"),
+        py::arg("reflectance"),
+        "Create a mixed (diffuse + specular) material.\n\n"
+        "Args:\n"
+        "    diffuse_ratio (float): Proportion of diffuse reflection [0, 1]\n"
+        "    specular_ratio (float): Proportion of specular reflection [0, 1]\n"
+        "    reflectance (float): Total surface reflectance [0, 1]\n\n"
+        "Returns:\n"
+        "    Material: Mixed material instance\n\n"
+        "Example:\n"
+        "    >>> mat = osg.material.mixed(0.7, 0.3, 0.99)\n"
+        "    >>> sim.material_pool.append(mat)\n");
 
-    material_module.def("detector", &material::detector,
-                        "Create a detector material factory.");
+    material_module.def("detector",
+        []() {
+            return material::detector()();
+        },
+        "Create a detector material.\n\n"
+        "Returns:\n"
+        "    Material: Detector material instance\n\n"
+        "Example:\n"
+        "    >>> detector_mat = osg.material.detector()\n"
+        "    >>> sim.material_pool.append(detector_mat)\n");
 
-    material_module.def("absorber", &material::absorber,
-                        "Create an absorber (perfect black body) material factory.");
+    material_module.def("absorber",
+        []() {
+            return material::absorber()();
+        },
+        "Create an absorber (perfect black body) material.\n\n"
+        "Returns:\n"
+        "    Material: Absorber material instance\n\n"
+        "Example:\n"
+        "    >>> absorber_mat = osg.material.absorber()\n"
+        "    >>> sim.material_pool.append(absorber_mat)\n");
 
-    material_module.def("spherical_lambertian", &material::spherical_lambertian,
-                        py::arg("reflectance"),
-                        py::arg("center"),
-                        "Create a spherical Lambertian material factory (optimized for spheres).");
+    material_module.def("spherical_lambertian",
+        [](float reflectance, float3 center) {
+            return material::spherical_lambertian(reflectance, center)();
+        },
+        py::arg("reflectance"),
+        py::arg("center"),
+        "Create a spherical Lambertian material (optimized for spheres).\n\n"
+        "Args:\n"
+        "    reflectance (float): Surface reflectance [0, 1]\n"
+        "    center (float3): Sphere center position\n\n"
+        "Returns:\n"
+        "    Material: Spherical Lambertian material instance\n\n"
+        "Example:\n"
+        "    >>> mat = osg.material.spherical_lambertian(0.98, osg.float3(0, 0, 0))\n"
+        "    >>> sim.material_pool.append(mat)\n");
 
-    material_module.def("spherical_mixed", &material::spherical_mixed,
-                        py::arg("diffuse_ratio"),
-                        py::arg("specular_ratio"),
-                        py::arg("reflectance"),
-                        py::arg("center"),
-                        "Create a spherical mixed material factory (optimized for spheres).");
+    material_module.def("spherical_mixed",
+        [](float diffuse_ratio, float specular_ratio, float reflectance, float3 center) {
+            return material::spherical_mixed(diffuse_ratio, specular_ratio, reflectance, center)();
+        },
+        py::arg("diffuse_ratio"),
+        py::arg("specular_ratio"),
+        py::arg("reflectance"),
+        py::arg("center"),
+        "Create a spherical mixed material (optimized for spheres).\n\n"
+        "Args:\n"
+        "    diffuse_ratio (float): Proportion of diffuse reflection [0, 1]\n"
+        "    specular_ratio (float): Proportion of specular reflection [0, 1]\n"
+        "    reflectance (float): Total surface reflectance [0, 1]\n"
+        "    center (float3): Sphere center position\n\n"
+        "Returns:\n"
+        "    Material: Spherical mixed material instance\n\n"
+        "Example:\n"
+        "    >>> mat = osg.material.spherical_mixed(0.7, 0.3, 0.99, osg.float3(0, 0, 0))\n"
+        "    >>> sim.material_pool.append(mat)\n");
 
     material_module.def("get_default_materials", &material::get_default_materials,
                         "Get default material factory mapping.");

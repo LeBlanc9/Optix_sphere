@@ -18,6 +18,26 @@ void bind_sim(py::module_ &m) {
     // Bind Mesh structure
     py::class_<Mesh>(m, "Mesh")
         .def(py::init<>())
+        .def_static("from_obj", &Mesh::from_obj,
+             py::arg("file_path"),
+             "Load mesh from OBJ file.\n\n"
+             "Args:\n"
+             "    file_path (str): Path to OBJ file\n\n"
+             "Returns:\n"
+             "    Mesh: Loaded mesh object\n\n"
+             "Example:\n"
+             "    >>> mesh = Mesh.from_obj('sphere.obj')\n"
+             "    >>> print(mesh.get_triangle_count())\n")
+        .def("copy", [](const Mesh& self) { return Mesh(self); },
+             "Create a deep copy of the mesh.\n\n"
+             "Returns:\n"
+             "    Mesh: Independent copy of the mesh\n\n"
+             "Example:\n"
+             "    >>> mesh = Mesh.from_obj('sphere.obj')\n"
+             "    >>> mesh_copy = mesh.copy()\n"
+             "    >>> mesh_copy.remove_mesh_by_material('wall')\n"
+             "    >>> # Original mesh is unchanged\n"
+             "    >>> print(mesh.get_material_count())  # Still has 'wall'\n")
         .def_readonly("vertices", &Mesh::vertices,
              "List of vertex positions (float3)")
         .def_readonly("normals", &Mesh::normals,
@@ -34,15 +54,97 @@ void bind_sim(py::module_ &m) {
              "Get number of vertices in the mesh")
         .def("get_material_count", &Mesh::get_material_count,
              "Get number of materials in the mesh")
+        .def("get_bounds", &Mesh::get_bounds,
+             "Get axis-aligned bounding box of the mesh.\n\n"
+             "Returns:\n"
+             "    tuple[float3, float3]: (min_corner, max_corner) in millimeters\n\n"
+             "Example:\n"
+             "    >>> mesh = osg.Mesh.from_obj('sphere.obj')\n"
+             "    >>> min_pt, max_pt = mesh.get_bounds()\n"
+             "    >>> print(f'X: [{min_pt.x}, {max_pt.x}]')\n"
+             "    >>> print(f'Y: [{min_pt.y}, {max_pt.y}]')\n"
+             "    >>> print(f'Z: [{min_pt.z}, {max_pt.z}]')\n")
         .def("get_triangle_count_by_material", &Mesh::get_triangle_count_by_material,
              py::arg("material_name"),
              "Get number of triangles with a specific material")
         .def("get_vertex_count_by_material", &Mesh::get_vertex_count_by_material,
              py::arg("material_name"),
              "Get number of unique vertices used by a specific material")
-        .def("get_triangle_indices_by_material", &Mesh::get_triangle_indices_by_material,
+        .def("split_by_material", &Mesh::split_by_material,
+             "Split mesh into separate meshes by material.\n\n"
+             "Returns:\n"
+             "    dict[str, Mesh]: Map of material_name -> Mesh\n\n"
+             "Example:\n"
+             "    >>> mesh = Mesh.from_obj('sphere.obj')\n"
+             "    >>> parts = mesh.split_by_material()\n"
+             "    >>> wall_mesh = parts['wall']\n"
+             "    >>> detector_mesh = parts['detector']\n")
+        .def("extract_mesh_by_material", &Mesh::extract_mesh_by_material,
              py::arg("material_name"),
-             "Get all triangle indices that use a specific material");
+             "Extract a new mesh containing only the specified material.\n\n"
+             "Args:\n"
+             "    material_name (str): Material name to extract\n\n"
+             "Returns:\n"
+             "    Mesh: New mesh with only triangles of this material\n\n"
+             "Example:\n"
+             "    >>> mesh = Mesh.from_obj('sphere.obj')\n"
+             "    >>> wall_mesh = mesh.extract_mesh_by_material('wall')\n"
+             "    >>> print(wall_mesh.get_triangle_count())\n")
+        .def("remove_mesh_by_material", &Mesh::remove_mesh_by_material,
+             py::arg("material_name"),
+             "Remove triangles with the specified material (in-place modification).\n\n"
+             "Args:\n"
+             "    material_name (str): Material name to remove\n\n"
+             "Note:\n"
+             "    This modifies the mesh in-place. The specified material and its\n"
+             "    triangles are removed from this mesh object.\n\n"
+             "Example:\n"
+             "    >>> mesh = Mesh.from_obj('sphere.obj')\n"
+             "    >>> print(mesh.get_material_count())  # e.g., 3\n"
+             "    >>> mesh.remove_mesh_by_material('sample_holder')\n"
+             "    >>> print(mesh.get_material_count())  # e.g., 2\n")
+        .def("info", &Mesh::info,
+             "Print detailed mesh statistics.\n\n"
+             "Displays:\n"
+             "  - Total vertices and triangles\n"
+             "  - Materials with triangle/vertex counts and percentages\n\n"
+             "Example:\n"
+             "    >>> mesh = Mesh.from_obj('sphere.obj')\n"
+             "    >>> mesh.info()\n"
+             "    ========================================\n"
+             "    Mesh Statistics\n"
+             "    ========================================\n"
+             "    Vertices: 642\n"
+             "    Triangles: 1280\n"
+             "    Materials: 2\n"
+             "    ...\n")
+        .def("translate", &Mesh::translate,
+             py::arg("offset"),
+             "Translate the mesh by a given offset (in-place).\n\n"
+             "Args:\n"
+             "    offset (float3): Translation vector (x, y, z) in millimeters\n\n"
+             "Example:\n"
+             "    >>> import optix_sphere as osg\n"
+             "    >>> mesh = osg.Mesh.from_obj('sphere.obj')\n"
+             "    >>> mesh.translate(osg.float3(10.0, 0.0, 0.0))  # Move 10mm in X\n")
+        .def("rotate_y", &Mesh::rotate_y,
+             py::arg("angle_degrees"),
+             "Rotate the mesh around Y-axis (in-place).\n\n"
+             "Args:\n"
+             "    angle_degrees (float): Rotation angle in degrees\n"
+             "                          (positive = counter-clockwise from top view)\n\n"
+             "Example:\n"
+             "    >>> mesh = osg.Mesh.from_obj('sphere.obj')\n"
+             "    >>> mesh.rotate_y(180.0)  # Flip 180 degrees\n")
+        .def("scale", &Mesh::scale,
+             py::arg("scale_factor"),
+             "Scale the mesh uniformly (in-place).\n\n"
+             "Args:\n"
+             "    scale_factor (float): Scaling factor (1.0 = no change, 2.0 = double size)\n\n"
+             "Example:\n"
+             "    >>> mesh = osg.Mesh.from_obj('sphere.obj')\n"
+             "    >>> mesh.scale(2.0)   # Double the size\n"
+             "    >>> mesh.scale(0.5)   # Halve the size\n");
 
     py::class_<SimConfig>(m, "SimConfig")
         .def(py::init<>())
@@ -191,17 +293,24 @@ void bind_sim(py::module_ &m) {
              "    >>> scene = Scene.from_obj('sphere.obj')\n"
              "    >>> detector_verts = scene.get_vertex_count_by_material('detector_material')\n"
              "    >>> print(f'Detector uses {detector_verts} unique vertices')\n")
-        .def("get_triangle_indices_by_material", &Scene::get_triangle_indices_by_material,
-             py::arg("material_name"),
-             "Get all triangle indices that use a specific material.\n\n"
-             "Args:\n"
-             "    material_name (str): Material name to query\n\n"
-             "Returns:\n"
-             "    list[int]: List of triangle indices (0-based), empty if material not found\n\n"
+        .def("info", &Scene::info,
+             "Print detailed scene statistics and node information.\n\n"
+             "Displays:\n"
+             "  - Total nodes (enabled/disabled)\n"
+             "  - Total triangles and vertices\n"
+             "  - Per-node mesh information\n"
+             "  - Materials and triangle counts per material\n"
+             "  - Transform information (if non-identity)\n\n"
              "Example:\n"
              "    >>> scene = Scene.from_obj('sphere.obj')\n"
-             "    >>> detector_tri_ids = scene.get_triangle_indices_by_material('detector_material')\n"
-             "    >>> print(f'First detector triangle: {detector_tri_ids[0]}')\n");
+             "    >>> scene.info()\n"
+             "    ========================================\n"
+             "    Scene Statistics\n"
+             "    ========================================\n"
+             "    Total Nodes: 1\n"
+             "      Enabled: 1\n"
+             "      Disabled: 0\n"
+             "    ...\n");
 
     py::class_<Simulator>(m, "Simulator")
         .def(py::init<int>(), py::arg("device_id") = 0,
@@ -214,14 +323,65 @@ void bind_sim(py::module_ &m) {
              "    >>> \n"
              "    >>> # Use GPU 1\n"
              "    >>> sim = Simulator(device_id=1)\n")
+        .def_readwrite("config", &Simulator::config,
+             "Simulation configuration parameters.\n\n"
+             "Can be modified directly before calling run().\n\n"
+             "Example:\n"
+             "    >>> sim = Simulator()\n"
+             "    >>> sim.config.num_rays = 2000000\n"
+             "    >>> sim.config.max_bounces = 500\n"
+             "    >>> sim.config.use_nee = True\n"
+             "    >>> sim.config.random_seed = 12345\n"
+             "    >>> result = sim.run(source)\n")
+        .def("add_material", &Simulator::add_material,
+             py::arg("material"),
+             "Add a material to the material pool.\n\n"
+             "Args:\n"
+             "    material: Material instance\n\n"
+             "Returns:\n"
+             "    int: Index of the material in the pool\n\n"
+             "Example:\n"
+             "    >>> sim = Simulator()\n"
+             "    >>> idx0 = sim.add_material(material.lambertian(0.98))\n"
+             "    >>> idx1 = sim.add_material(material.detector())\n"
+             "    >>> print(idx0, idx1)  # 0 1\n")
+        .def("set_material", &Simulator::set_material,
+             py::arg("index"), py::arg("material"),
+             "Set material at a specific index in the pool.\n\n"
+             "Args:\n"
+             "    index (int): Material index\n"
+             "    material: New material instance\n\n"
+             "Example:\n"
+             "    >>> sim.set_material(0, material.lambertian(0.95))\n")
+        .def("get_material_pool_size", &Simulator::get_material_pool_size,
+             "Get the number of materials in the pool.\n\n"
+             "Returns:\n"
+             "    int: Number of materials\n\n"
+             "Example:\n"
+             "    >>> size = sim.get_material_pool_size()\n")
+        .def("get_material", &Simulator::get_material,
+             py::arg("index"),
+             "Get material at a specific index.\n\n"
+             "Args:\n"
+             "    index (int): Material index\n\n"
+             "Returns:\n"
+             "    Material: Material instance\n\n"
+             "Example:\n"
+             "    >>> mat = sim.get_material(0)\n")
+        .def("clear_materials", &Simulator::clear_materials,
+             "Clear all materials from the pool.\n\n"
+             "Example:\n"
+             "    >>> sim.clear_materials()\n")
         .def("build_scene",
              &Simulator::build_scene,
-             py::arg("cpu_scene"), py::arg("materials"),
+             py::arg("cpu_scene"), py::arg("material_mapping"), py::arg("flip_detector_normal") = false,
              "Build GPU scene from Scene.\n\n"
              "Converts an independently created Scene into GPU acceleration structures.\n\n"
              "Args:\n"
              "    cpu_scene (Scene): CPU-side scene data\n"
-             "    materials (dict[str, MaterialFactory]): Material name to factory mapping\n\n"
+             "    materials (dict[str, MaterialFactory]): Material name to factory mapping\n"
+             "    flip_detector_normal (bool, optional): Flip detector normal direction. Defaults to False.\n"
+             "                                           Set to True if mesh has inverted detector normals.\n\n"
              "Example:\n"
              "    >>> from optix_sphere import Scene, Simulator, material\n"
              "    >>> \n"
@@ -235,36 +395,39 @@ void bind_sim(py::module_ &m) {
              "    ...     'detector': material.detector()\n"
              "    ... }\n"
              "    >>> \n"
-             "    >>> # Build GPU scene\n"
+             "    >>> # Build GPU scene (flip detector normal if needed)\n"
              "    >>> sim = Simulator()\n"
-             "    >>> sim.build_scene(scene, materials)\n"
+             "    >>> sim.build_scene(scene, materials, flip_detector_normal=True)\n"
              "    >>> result = sim.run(source, config)")
-        .def("run", static_cast<SimulationResult (Simulator::*)(phonder::PhotonSource&, const SimConfig&)>(&Simulator::run),
-             py::arg("photon_source"), py::arg("config"))
-        .def("run", static_cast<SimulationResult (Simulator::*)(const phonder::PhotonBatch&, const SimConfig&)>(&Simulator::run),
-             py::arg("source_batch"), py::arg("config"))
-        .def("get_detector_total_area", &Simulator::get_detector_total_area)
-        .def("update_material", &Simulator::update_material,
-             py::arg("name"), py::arg("factory"),
-             "Update a single material without rebuilding the scene geometry.\n\n"
-             "This is a fast operation that only updates material parameters.\n"
-             "Changes take effect on the next run().\n\n"
+        .def("run", static_cast<SimulationResult (Simulator::*)(phonder::PhotonSource&)>(&Simulator::run),
+             py::arg("photon_source"),
+             "Run Monte Carlo simulation using a procedural photon source.\n\n"
+             "Uses simulator.config for configuration.\n\n"
              "Args:\n"
-             "    name (str): Material name to update (must exist in scene)\n"
-             "    factory (MaterialFactory): Factory function to create new material\n\n"
-             "Raises:\n"
-             "    RuntimeError: If material name not found or scene not built\n\n"
+             "    photon_source: Photon source object (e.g., SpotSource, IsotropicPointSource)\n\n"
+             "Returns:\n"
+             "    SimulationResult: Simulation results\n\n"
              "Example:\n"
-             "    >>> from optix_sphere import Simulator, material\n"
              "    >>> sim = Simulator()\n"
-             "    >>> sim.build_scene_from_file('sphere.obj', config)\n"
-             "    >>> \n"
-             "    >>> # Update wall material reflectance\n"
-             "    >>> sim.update_material('wall_material', material.lambertian(0.95))\n"
-             "    >>> result = sim.run(source, config)  # Uses new material\n"
-             "    >>> \n"
-             "    >>> # Change to mixed material\n"
-             "    >>> sim.update_material('wall_material', material.mixed(0.7, 0.3, 0.98))\n"
-             "    >>> result = sim.run(source, config)  # Uses updated material\n");
+             "    >>> sim.config.num_rays = 1000000\n"
+             "    >>> sim.config.use_nee = True\n"
+             "    >>> source = SpotSource()\n"
+             "    >>> source.center_position = (0, 0, 10)\n"
+             "    >>> result = sim.run(source)\n")
+        .def("run", static_cast<SimulationResult (Simulator::*)(const phonder::PhotonBatch&)>(&Simulator::run),
+             py::arg("source_batch"),
+             "Run Monte Carlo simulation using a pre-generated photon batch.\n\n"
+             "Uses simulator.config for configuration.\n\n"
+             "Args:\n"
+             "    source_batch: Pre-generated photon batch\n\n"
+             "Returns:\n"
+             "    SimulationResult: Simulation results\n\n"
+             "Example:\n"
+             "    >>> sim = Simulator()\n"
+             "    >>> sim.config.max_bounces = 500\n"
+             "    >>> batch = generate_photons(source, 1000000)\n"
+             "    >>> result = sim.run(batch)\n")
+        .def("get_detector_total_area", &Simulator::get_detector_total_area)
+        .def("update_materials", &Simulator::update_materials, "Update materials from pool to GPU");
 
 }

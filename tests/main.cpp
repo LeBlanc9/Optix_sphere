@@ -15,45 +15,43 @@ namespace fs = std::filesystem;
 int main() {
     const int num_ray = 2'000'000;
     try {
-        // --- Simulation Configuration ---
-        SimConfig config;
-        config.num_rays = num_ray;
-        config.max_bounces = 500;
-        config.random_seed = static_cast<unsigned int>(
-            std::chrono::high_resolution_clock::now().time_since_epoch().count()
-        );
-
         // --- Create Photon Source ---
         auto source_params = std::make_shared<phonder::IsotropicPointSource>();
         source_params->position = {0.0f, 0.0f, 0.0f};
         source_params->weight = 1.0; // Represents 1W total power
 
-        spdlog::info("=== Test Configuration ===");
-        spdlog::info("  Source Type: Isotropic Point Source");
-        spdlog::info("  Total Rays: {}", config.num_rays);
-        spdlog::info("  Max Bounces: {}", config.max_bounces);
-        spdlog::info("  Random Seed: {}", config.random_seed);
 
-        // --- High-level API Setup ---
-        // 1. Create the simulator
+        //  Create the simulator
         Simulator simulator;
+        simulator.config.num_rays = num_ray;
+        simulator.config.max_bounces = 500;
+        simulator.config.random_seed = static_cast<unsigned int>(
+            std::chrono::high_resolution_clock::now().time_since_epoch().count()
+        );
+
 
         // Configure and build the scene from a file
         fs::path mesh_path = fs::path("/data-pool/zxp/code/Optix_sphere/assets") / "R_25.4_1mm.obj";
 
-        // === NEW: Define custom materials using factory functions ===
+        // === NEW: Material Pool API ===
         const float wall_reflectance = 0.98f;
-        std::map<std::string, MaterialFactory> materials;
-        // materials["wall_material"] = mixed(0.7f, 0.3f, 0.99f);
-        materials["wall_material"] = material::lambertian(wall_reflectance);
-        materials["detector_material"] = material::detector();
-        materials["sample_material"] = material::lambertian(0.0f);
+
+        // 1. Setup material pool (call the factory to create instances)
+        simulator.add_material(material::lambertian(wall_reflectance)());  // index 0
+        simulator.add_material(material::detector()());                     // index 1
+        simulator.add_material(material::lambertian(0.0f)());              // index 2
+
+        // 2. Map mesh material names to pool indices
+        std::map<std::string, size_t> material_mapping;
+        material_mapping["wall_material"] = 0;
+        material_mapping["detector_material"] = 1;
+        material_mapping["sample_material"] = 2;
 
         // Load scene from OBJ file
         Scene scene = Scene::from_obj(mesh_path.string());
 
-        // Build GPU scene with materials
-        simulator.build_scene(scene, materials);
+        // Build GPU scene with material pool
+        simulator.build_scene(scene, material_mapping);
 
         // --- Theoretical Calculation ---
         float sphere_radius_for_theory = 152.4f / 2.0f;
@@ -91,29 +89,29 @@ int main() {
 
         // Run Non-NEE
         spdlog::info("\n🔹 Running Mesh Non-NEE...");
-        config.use_nee = false;
+        simulator.config.use_nee = false;
         auto start_time_non_nee = std::chrono::high_resolution_clock::now();
-        mesh_non_nee_result = simulator.run(*source_params, config);
+        mesh_non_nee_result = simulator.run(*source_params);
         auto end_time_non_nee = std::chrono::high_resolution_clock::now();
         auto duration_non_nee = std::chrono::duration_cast<std::chrono::milliseconds>(end_time_non_nee - start_time_non_nee);
         spdlog::info("  ✅ Mesh Non-NEE took: {} ms", duration_non_nee.count());
 
         // Apply physical scaling to simulation results
-        double physical_non_nee_detected_flux = (mesh_non_nee_result.detected_flux / (double)config.num_rays) * incident_power_for_theory;
-        double physical_non_nee_irradiance = (mesh_non_nee_result.irradiance / (double)config.num_rays) * incident_power_for_theory;
+        double physical_non_nee_detected_flux = (mesh_non_nee_result.detected_flux / (double)simulator.config.num_rays) * incident_power_for_theory;
+        double physical_non_nee_irradiance = (mesh_non_nee_result.irradiance / (double)simulator.config.num_rays) * incident_power_for_theory;
         
         // Run NEE
         spdlog::info("\n🔹 Running Mesh NEE...");
-        config.use_nee = true;
+        simulator.config.use_nee = true;
         auto start_time_nee = std::chrono::high_resolution_clock::now();
-        mesh_nee_result = simulator.run(*source_params, config);
+        mesh_nee_result = simulator.run(*source_params);
         auto end_time_nee = std::chrono::high_resolution_clock::now();
         auto duration_nee = std::chrono::duration_cast<std::chrono::milliseconds>(end_time_nee - start_time_nee);
         spdlog::info("  ✅ Mesh NEE took: {} ms", duration_nee.count());
 
         // Apply physical scaling to NEE results
-        double physical_nee_detected_flux = (mesh_nee_result.detected_flux / (double)config.num_rays) * incident_power_for_theory;
-        double physical_nee_irradiance = (mesh_nee_result.irradiance / (double)config.num_rays) * incident_power_for_theory;
+        double physical_nee_detected_flux = (mesh_nee_result.detected_flux / (double)simulator.config.num_rays) * incident_power_for_theory;
+        double physical_nee_irradiance = (mesh_nee_result.irradiance / (double)simulator.config.num_rays) * incident_power_for_theory;
 
 
         // --- Print Results (adjusted for new TheoryResult) ---
@@ -135,7 +133,7 @@ int main() {
         std::cout << "  (error: " << std::setprecision(3) << mesh_non_nee_error << " %)\n";
         std::cout << std::setprecision(6);
         std::cout << "  Detected flux:  " << physical_non_nee_detected_flux << " W\n";
-        std::cout << "  Detected rays:  " << mesh_non_nee_result.detected_rays << " / " << config.num_rays;
+        std::cout << "  Detected rays:  " << mesh_non_nee_result.detected_rays << " / " << simulator.config.num_rays;
         std::cout << "  (avg bounces: " << std::setprecision(2) << mesh_non_nee_result.avg_bounces << ")\n";
 
         std::cout << std::setprecision(6);
@@ -144,7 +142,7 @@ int main() {
         std::cout << "  (error: " << std::setprecision(3) << mesh_nee_error << " %)\n";
         std::cout << std::setprecision(6);
         std::cout << "  Detected flux:  " << physical_nee_detected_flux << " W\n";
-        std::cout << "  Detected rays:  " << mesh_nee_result.detected_rays << " / " << config.num_rays;
+        std::cout << "  Detected rays:  " << mesh_nee_result.detected_rays << " / " << simulator.config.num_rays;
         std::cout << "  (avg bounces: " << std::setprecision(2) << mesh_nee_result.avg_bounces << ")\n";
 
         std::cout << "\n======================================\n" << std::endl;

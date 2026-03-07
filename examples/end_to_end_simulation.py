@@ -5,7 +5,7 @@ from pathlib import Path
 
 
 def main():
-    osg.set_log_level(osg.LogLevel.WARN)
+    # osg.set_log_level(osg.LogLevel.WARN)
 
     num_photons = int(1e7)
 

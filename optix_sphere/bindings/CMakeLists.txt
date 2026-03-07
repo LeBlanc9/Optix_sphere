@@ -20,6 +20,7 @@ target_link_libraries(_core PRIVATE
     sphere
     media
     voxel_media
+    spdlog::spdlog
 )
 
 target_compile_definitions(_core PRIVATE FMT_UNICODE=0)
