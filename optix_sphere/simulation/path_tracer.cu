@@ -106,6 +106,8 @@ SimulationResult PathTracer::launch_from_batch(
     params.detector.position = scene_.get_detector_position();
     params.detector.normal = scene_.get_detector_normal();
     params.detector.radius = scene_.get_detector_radius();
+    params.detector.na = scene_.get_detector_na();
+    params.detector.cos_max_angle = scene_.get_detector_cos_max_angle();
 
     // Detector triangles are not used for NEE (we use analytical disk approximation)
     params.detector_triangles = nullptr;

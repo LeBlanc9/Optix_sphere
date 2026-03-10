@@ -5,6 +5,7 @@
 #include <vector_types.h>
 #include <map>
 #include <functional>
+#include <cmath>
 
 /**
  * Abstract base class for materials based on physical behavior
@@ -118,17 +119,38 @@ private:
  * - Absorbs all incident light (no reflection)
  * - Records weighted flux for irradiance calculation
  * - Terminates ray paths
+ * - Optional NA (Numerical Aperture) constraint for angle-limited detection
  *
  * Used for: Photodetectors, radiometers, flux measurement surfaces
  */
 class DetectorMaterial : public Material {
 public:
-    DetectorMaterial() = default;
+    /**
+     * Constructor for detector material
+     * @param na Numerical Aperture (0-1, default 1.0 = no angle limit)
+     * @param n Refractive index of medium (default 1.0 for air)
+     */
+    DetectorMaterial(float na = 1.0f, float n = 1.0f)
+        : na_(na), n_(n) {}
 
     std::string get_kernel_name() const override { return "__closesthit__detector"; }
     std::string get_shadow_kernel_name() const override { return "__anyhit__detector_shadow"; }
     size_t get_sbt_data_size() const override;
     void write_sbt_data(void* dest) const override;
+
+    float get_na() const { return na_; }
+    float get_n() const { return n_; }
+
+    // 计算最大接收角的余弦值: cos(θ_max) = sqrt(1 - (NA/n)^2)
+    float get_cos_max_angle() const {
+        float sin_max = na_ / n_;
+        if (sin_max >= 1.0f) return 0.0f;  // NA >= n, 接收所有角度
+        return sqrtf(1.0f - sin_max * sin_max);
+    }
+
+private:
+    float na_;  // Numerical Aperture
+    float n_;   // Refractive index
 };
 
 /**
@@ -296,10 +318,12 @@ inline MaterialFactory mixed(float diffuse_ratio, float specular_ratio, float re
 
 /**
  * Create a detector material factory
+ * @param na Numerical Aperture (0-1, default 1.0 = no angle limit)
+ * @param n Refractive index of medium (default 1.0 for air)
  */
-inline MaterialFactory detector() {
-    return []() {
-        return std::make_shared<DetectorMaterial>();
+inline MaterialFactory detector(float na = 1.0f, float n = 1.0f) {
+    return [na, n]() {
+        return std::make_shared<DetectorMaterial>(na, n);
     };
 }
 

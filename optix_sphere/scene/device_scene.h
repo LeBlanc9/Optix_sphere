@@ -48,6 +48,8 @@ public:
     float3 get_detector_normal() const { return detector_normal_; }
     float get_detector_radius() const { return detector_radius_; }
     float get_detector_total_area() const { return detector_total_area_; }
+    float get_detector_na() const { return detector_na_; }
+    float get_detector_cos_max_angle() const { return detector_cos_max_angle_; }
 
     /**
      * Flip the detector normal direction
@@ -93,4 +95,6 @@ private:
     float3 detector_normal_ = {0, 0, 0};
     float detector_radius_ = 0.0f;
     float detector_total_area_ = 0.0f;
+    float detector_na_ = 1.0f;           // Numerical Aperture (默认 1.0 = 无限制)
+    float detector_cos_max_angle_ = 0.0f; // cos(θ_max) for angle check
 };

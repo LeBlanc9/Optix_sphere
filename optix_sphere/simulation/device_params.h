@@ -122,6 +122,8 @@ struct DeviceParams {
         float3 position;
         float3 normal;
         float radius;
+        float na;              // Numerical Aperture (数值孔径, 默认 1.0 表示无限制)
+        float cos_max_angle;   // cos(θ_max) = sqrt(1 - (NA/n)^2), 预计算用于快速比较
         // Use radius for intersection check, not area
     } detector;
 

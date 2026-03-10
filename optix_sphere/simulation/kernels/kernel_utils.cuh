@@ -112,6 +112,12 @@ __device__ __forceinline__ void accumulate_nee_contribution(
         float cos_theta_detector = dot(-dir_to_detector, params.detector.normal);
 
         if (cos_theta_detector > 0.0f) {
+            // NA (Numerical Aperture) angle check
+            // cos_theta_detector 就是光线相对于探测器法线的余弦值
+            if (cos_theta_detector < params.detector.cos_max_angle) {
+                return;  // 超出 NA 范围，不贡献
+            }
+
             // Compute geometric factor (solid angle projection)
             float detector_area = phonder::pi * params.detector.radius * params.detector.radius;
             float geometric_factor = (detector_area * cos_theta_detector) / (distance * distance);

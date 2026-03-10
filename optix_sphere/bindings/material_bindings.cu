@@ -52,14 +52,20 @@ void bind_material(py::module_ &m) {
         "    >>> sim.material_pool.append(mat)\n");
 
     material_module.def("detector",
-        []() {
-            return material::detector()();
+        [](float na, float n) {
+            return material::detector(na, n)();
         },
+        py::arg("na") = 1.0f,
+        py::arg("n") = 1.0f,
         "Create a detector material.\n\n"
+        "Args:\n"
+        "    na (float): Numerical Aperture [0, 1], default 1.0 (no angle limit)\n"
+        "    n (float): Refractive index of medium, default 1.0 (air)\n\n"
         "Returns:\n"
         "    Material: Detector material instance\n\n"
         "Example:\n"
-        "    >>> detector_mat = osg.material.detector()\n"
+        "    >>> detector_mat = osg.material.detector()  # No NA limit\n"
+        "    >>> detector_na05 = osg.material.detector(na=0.5)  # NA=0.5\n"
         "    >>> sim.material_pool.append(detector_mat)\n");
 
     material_module.def("absorber",

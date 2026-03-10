@@ -24,6 +24,20 @@ extern "C" __global__ void __closesthit__detector() {
                                      (static_cast<unsigned long long>(optixGetPayload_1()) << 32);
     RayPayload* payload = reinterpret_cast<RayPayload*>(payload_ptr);
 
+    // NA (Numerical Aperture) angle check
+    // 计算入射角度的余弦值
+    float3 ray_dir = optixGetWorldRayDirection();
+    float3 geometric_normal = compute_triangle_normal();
+    float3 shading_normal = dot(ray_dir, geometric_normal) < 0 ? geometric_normal : -geometric_normal;
+
+    float cos_incident_angle = fabsf(dot(ray_dir, shading_normal));
+
+    // 如果入射角超出 NA 范围，不探测（吸收但不记录）
+    if (cos_incident_angle < params.detector.cos_max_angle) {
+        payload->active = 0;
+        return;
+    }
+
     // Direct illumination: always count
     if (payload->bounce_count == 0) {
         atomicAdd(params.flux_buffer, payload->weight);

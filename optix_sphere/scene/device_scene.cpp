@@ -192,12 +192,23 @@ void DeviceScene::build(
     // 5. Extract detector triangles for NEE
     std::vector<float3> detector_vertices;
     detector_total_area_ = 0.0f;
+    detector_na_ = 1.0f;  // 默认值
+    detector_cos_max_angle_ = 0.0f;  // 默认值（接收所有角度）
 
     for (size_t i = 0; i < mesh.triangle_materials.size(); ++i) {
         int mat_idx = mesh.triangle_materials[i];
         if (mat_idx < static_cast<int>(materials_.size())) {
             // Check if this material is a detector
             if (materials_[mat_idx]->get_kernel_name() == "__closesthit__detector") {
+                // 获取 NA 参数（只需要获取一次，假设所有探测器三角形使用相同的材质）
+                if (detector_vertices.empty()) {
+                    auto detector_mat = std::dynamic_pointer_cast<DetectorMaterial>(materials_[mat_idx]);
+                    if (detector_mat) {
+                        detector_na_ = detector_mat->get_na();
+                        detector_cos_max_angle_ = detector_mat->get_cos_max_angle();
+                    }
+                }
+
                 uint3 idx = mesh.indices[i];
                 float3 v0 = mesh.vertices[idx.x];
                 float3 v1 = mesh.vertices[idx.y];
@@ -236,6 +247,7 @@ void DeviceScene::build(
                      analytical.normal.x, analytical.normal.y, analytical.normal.z);
         spdlog::info("  Radius: {:.6f} mm", analytical.radius);
         spdlog::info("  Total area: {:.6f} mm²", detector_total_area_);
+        spdlog::info("  NA: {:.3f}, cos(θ_max): {:.6f}", detector_na_, detector_cos_max_angle_);
     } else {
         spdlog::warn("No detector triangles found in mesh!");
     }
