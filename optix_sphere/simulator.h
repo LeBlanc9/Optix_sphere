@@ -38,33 +38,39 @@ public:
     SimConfig config;
 
     /**
-     * @brief 添加材质到材质池
-     * @param material 材质实例
-     * @return 材质在池中的索引
+     * @brief 获取场景中注册的材质总数
      */
-    size_t add_material(std::shared_ptr<Material> material);
+    size_t get_material_count() const;
 
     /**
-     * @brief 设置指定索引的材质
-     * @param index 材质索引
-     * @param material 新的材质实例
+     * @brief 通过名称获取材质实例
+     * @param material_name 材质名称
+     * @return 材质实例
+     * @throws std::runtime_error 如果名称不存在
      */
-    void set_material(size_t index, std::shared_ptr<Material> material);
+    std::shared_ptr<Material> get_material(const std::string& material_name) const;
 
     /**
-     * @brief 获取材质池大小
-     */
-    size_t get_material_pool_size() const;
-
-    /**
-     * @brief 获取指定索引的材质
-     */
-    std::shared_ptr<Material> get_material(size_t index) const;
-
-    /**
-     * @brief 清空材质池
+     * @brief 清空所有材质和映射关系
      */
     void clear_materials();
+
+    /**
+     * @brief 设置指定名称的材质参数
+     * 
+     * 注意：只能设置 build_scene 时已存在的材质名称。
+     * 
+     * @param material_name 材质名称
+     * @param material 新的材质实例
+     * @param sync_to_gpu 是否立即同步到 GPU (默认 false)
+     * @throws std::runtime_error 如果 material_name 在场景中不存在
+     */
+    void set_material(const std::string& material_name, std::shared_ptr<Material> material, bool sync_to_gpu = false);
+
+    /**
+     * @brief 获取当前场景中所有的材质名称
+     */
+    std::vector<std::string> get_material_names() const;
 
     /**
      * @brief 从Scene构建GPU场景（使用材质池）
@@ -97,17 +103,61 @@ public:
     );
 
     /**
-     * @brief 更新材质到GPU（不重建几何结构）
+     * @brief 从Scene构建GPU场景（直接传入材质对象）
      *
-     * 在修改 material_pool 后调用此方法同步到 GPU
+     * @param scene CPU端场景数据
+     * @param materials mesh材质名称 -> Material对象的映射
+     * @param flip_detector_normal 是否翻转探测器法向 (默认 false)
      *
      * @example
      * ```cpp
-     * sim.material_pool[0] = material::lambertian(0.95);
-     * sim.update_materials();  // 同步到 GPU
+     * Simulator sim;
+     *
+     * // 直接传入材质字典
+     * std::map<std::string, std::shared_ptr<Material>> materials;
+     * materials["wall"] = material::lambertian(0.98);
+     * materials["detector"] = material::detector();
+     *
+     * sim.build_scene(scene, materials);
+     *
+     * // 获取材质索引用于后续更新
+     * size_t wall_idx = sim.get_material_index("wall");
+     * sim.set_material(wall_idx, material::lambertian(0.99));
+     * sim.update_materials();
      * ```
      */
-    void update_materials();
+    void build_scene(
+        const Scene& scene,
+        const std::map<std::string, std::shared_ptr<Material>>& materials,
+        bool flip_detector_normal = false
+    );
+
+    /**
+     * @brief 根据材质名称获取材质池索引
+     * @param material_name 材质名称
+     * @return 材质在池中的索引
+     * @throws std::runtime_error 如果材质名称不存在
+     */
+    size_t get_material_index(const std::string& material_name) const;
+
+    /**
+     * @brief 获取所有材质名称到索引的映射
+     * @return 材质名称 -> 池索引的映射
+     */
+    std::map<std::string, size_t> get_material_indices() const;
+
+    /**
+     * @brief 更新材质到GPU（不重建几何结构）
+     *
+     * 在修改材质后调用此方法同步到 GPU
+     *
+     * @example
+     * ```cpp
+     * sim.set_material("wall", material::lambertian(0.95));
+     * sim.sync_to_gpu();  // 同步到 GPU
+     * ```
+     */
+    void sync_to_gpu();
 
     /**
      * @brief 运行蒙特卡洛仿真
@@ -126,4 +176,7 @@ private:
 
     // 材质池（私有）
     std::vector<std::shared_ptr<Material>> material_pool_;
+
+    // 材质名称到索引的映射（用于 get_material_index）
+    std::map<std::string, size_t> material_name_to_index_;
 };

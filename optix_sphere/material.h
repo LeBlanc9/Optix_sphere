@@ -102,7 +102,12 @@ public:
     size_t get_sbt_data_size() const override;
     void write_sbt_data(void* dest) const override;
 
+    // Accessors
     float get_reflectance() const { return reflectance_; }
+    void set_reflectance(float reflectance) { reflectance_ = reflectance; }
+
+    float3 get_center() const { return center_; }
+    void set_center(float3 center) { center_ = center; }
 
 private:
     float reflectance_;
@@ -138,8 +143,12 @@ public:
     size_t get_sbt_data_size() const override;
     void write_sbt_data(void* dest) const override;
 
+    // Accessors
     float get_na() const { return na_; }
+    void set_na(float na) { na_ = na; }
+
     float get_n() const { return n_; }
+    void set_n(float n) { n_ = n; }
 
     // 计算最大接收角的余弦值: cos(θ_max) = sqrt(1 - (NA/n)^2)
     float get_cos_max_angle() const {
@@ -216,9 +225,15 @@ public:
     size_t get_sbt_data_size() const override;
     void write_sbt_data(void* dest) const override;
 
+    // Accessors
     float get_diffuse_ratio() const { return diffuse_ratio_; }
+    void set_diffuse_ratio(float ratio) { diffuse_ratio_ = ratio; }
+
     float get_specular_ratio() const { return specular_ratio_; }
+    void set_specular_ratio(float ratio) { specular_ratio_ = ratio; }
+
     float get_reflectance() const { return reflectance_; }
+    void set_reflectance(float reflectance) { reflectance_ = reflectance; }
 
 private:
     float diffuse_ratio_;
@@ -262,9 +277,18 @@ public:
     size_t get_sbt_data_size() const override;
     void write_sbt_data(void* dest) const override;
 
+    // Accessors
     float get_diffuse_ratio() const { return diffuse_ratio_; }
+    void set_diffuse_ratio(float ratio) { diffuse_ratio_ = ratio; }
+
     float get_specular_ratio() const { return specular_ratio_; }
+    void set_specular_ratio(float ratio) { specular_ratio_ = ratio; }
+
     float get_reflectance() const { return reflectance_; }
+    void set_reflectance(float reflectance) { reflectance_ = reflectance; }
+
+    float3 get_center() const { return center_; }
+    void set_center(float3 center) { center_ = center; }
 
 private:
     float diffuse_ratio_;

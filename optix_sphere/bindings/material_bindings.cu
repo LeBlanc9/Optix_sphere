@@ -11,9 +11,40 @@ void bind_material(py::module_ &m) {
         .def("get_kernel_name", &Material::get_kernel_name,
              "Returns the OptiX kernel name for this material");
 
-    py::class_<LambertianMaterial, Material, std::shared_ptr<LambertianMaterial>>(m, "LambertianMaterial");
-    py::class_<MixedMaterial, Material, std::shared_ptr<MixedMaterial>>(m, "MixedMaterial");
-    py::class_<DetectorMaterial, Material, std::shared_ptr<DetectorMaterial>>(m, "DetectorMaterial");
+    py::class_<LambertianMaterial, Material, std::shared_ptr<LambertianMaterial>>(m, "LambertianMaterial")
+        .def_property("reflectance", &LambertianMaterial::get_reflectance, &LambertianMaterial::set_reflectance,
+                      "Surface reflectance [0, 1]");
+
+    py::class_<SphericalLambertianMaterial, Material, std::shared_ptr<SphericalLambertianMaterial>>(m, "SphericalLambertianMaterial")
+        .def_property("reflectance", &SphericalLambertianMaterial::get_reflectance, &SphericalLambertianMaterial::set_reflectance,
+                      "Surface reflectance [0, 1]")
+        .def_property("center", &SphericalLambertianMaterial::get_center, &SphericalLambertianMaterial::set_center,
+                      "Sphere center position");
+
+    py::class_<MixedMaterial, Material, std::shared_ptr<MixedMaterial>>(m, "MixedMaterial")
+        .def_property("reflectance", &MixedMaterial::get_reflectance, &MixedMaterial::set_reflectance,
+                      "Total surface reflectance [0, 1]")
+        .def_property("diffuse_ratio", &MixedMaterial::get_diffuse_ratio, &MixedMaterial::set_diffuse_ratio,
+                      "Proportion of diffuse reflection [0, 1]")
+        .def_property("specular_ratio", &MixedMaterial::get_specular_ratio, &MixedMaterial::set_specular_ratio,
+                      "Proportion of specular reflection [0, 1]");
+
+    py::class_<SphericalMixedMaterial, Material, std::shared_ptr<SphericalMixedMaterial>>(m, "SphericalMixedMaterial")
+        .def_property("reflectance", &SphericalMixedMaterial::get_reflectance, &SphericalMixedMaterial::set_reflectance,
+                      "Total surface reflectance [0, 1]")
+        .def_property("diffuse_ratio", &SphericalMixedMaterial::get_diffuse_ratio, &SphericalMixedMaterial::set_diffuse_ratio,
+                      "Proportion of diffuse reflection [0, 1]")
+        .def_property("specular_ratio", &SphericalMixedMaterial::get_specular_ratio, &SphericalMixedMaterial::set_specular_ratio,
+                      "Proportion of specular reflection [0, 1]")
+        .def_property("center", &SphericalMixedMaterial::get_center, &SphericalMixedMaterial::set_center,
+                      "Sphere center position");
+
+    py::class_<DetectorMaterial, Material, std::shared_ptr<DetectorMaterial>>(m, "DetectorMaterial")
+        .def_property("na", &DetectorMaterial::get_na, &DetectorMaterial::set_na,
+                      "Numerical Aperture [0, 1]")
+        .def_property("n", &DetectorMaterial::get_n, &DetectorMaterial::set_n,
+                      "Refractive index of medium");
+
     py::class_<AbsorberMaterial, Material, std::shared_ptr<AbsorberMaterial>>(m, "AbsorberMaterial");
 
     py::module_ material_module = m.def_submodule("material", "Material factory functions for creating custom materials");

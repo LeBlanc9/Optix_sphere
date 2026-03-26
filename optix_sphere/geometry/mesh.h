@@ -24,6 +24,13 @@ struct Mesh {
 
     static Mesh from_obj(const std::string& file_path);
 
+    /**
+     * @brief Export mesh to OBJ and MTL files
+     * @param obj_file_path Output OBJ path
+     * @param mtl_file_path Output MTL path. If empty, uses <obj_basename>.mtl in the same directory.
+     */
+    void to_obj(const std::string& obj_file_path, const std::string& mtl_file_path = "") const;
+
     // ========================================================================
     // Basic Statistics
     // ========================================================================

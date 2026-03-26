@@ -71,6 +71,14 @@ public:
     SimulationResult run(int num_photons);
 
     /**
+     * @brief Run simulation with an explicit source and photon count
+     * @param source Photon source used to generate input photons for this run
+     * @param num_photons Number of photons to simulate
+     * @return Simulation results on device
+     */
+    SimulationResult run(const std::shared_ptr<PhotonSource>& source, int num_photons);
+
+    /**
      * @brief Run simulation with input photon batch
      * @param input_batch Initial photon batch
      * @return Simulation results on device

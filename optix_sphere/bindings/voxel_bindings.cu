@@ -128,6 +128,11 @@ void bind_voxel(py::module_ &m) {
         .def(py::init<const SimConfig&>(),
              py::arg("config"),
              "Create simulator from SimConfig")
+        .def("run",
+             static_cast<SimulationResult (Simulator::*)(const std::shared_ptr<PhotonSource>&, int)>(&Simulator::run),
+             py::arg("source"),
+             py::arg("num_photons"),
+             "Run simulation with explicit source and num_photons")
         .def("run", static_cast<SimulationResult (Simulator::*)(int)>(&Simulator::run),
              py::arg("num_photons"),
              "Run simulation with num_photons")

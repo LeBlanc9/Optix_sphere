@@ -51,10 +51,12 @@ def main():
     sim_config.num_rays = device_result.reflected_batch.size()
     sim_config.max_bounces = 500
     sim_config.use_nee = True
-    sim_config.random_seed = random.randint(1, 1e6)
+    sim_config.random_seed = random.randint(1, 1000000)
 
 
     mesh_path = (Path(__file__).parent.parent / "assets/R_25.4_1mm.obj")
+    
+    # NEW RECOMMENDED API: Define materials directly in a dictionary
     materials = {
         "wall_material": osg.material.lambertian(0.99),  # High reflectance coating
         "detector_material": osg.material.detector(),
@@ -63,16 +65,18 @@ def main():
 
 
     simulator = osg.Simulator()
+    simulator.config = sim_config
 
     print(f"\n🔨 Building integrating sphere scene...")
     start = time.time()
     scene = osg.Scene.from_obj(str(mesh_path))
+    # Direct name-based build
     simulator.build_scene(scene, materials)
     elapsed = time.time() - start
     print(f"✅ Scene built in {elapsed:.3f} seconds")
 
     start = time.time()
-    result = simulator.run(device_result.reflected_batch, sim_config)
+    result = simulator.run(device_result.reflected_batch)
     elapsed = time.time() - start
 
     print(f"✅ Sphere simulation completed in {elapsed:.3f} seconds")
@@ -80,7 +84,6 @@ def main():
     print(f"  Detected Flux:        {result.detected_flux:.6f} W")
     print(f"  Detector Irradiance:  {result.irradiance:.6f} W/mm²")
     print(f"  Detected Rays:        {result.detected_rays:,} / {result.total_rays:,}")
-    print(f"  Detection Efficiency: {result.detected_rays/result.total_rays*100:.2f}%")
     print(f"  Average Bounces:      {result.avg_bounces:.2f}")
 
 if __name__ == "__main__":

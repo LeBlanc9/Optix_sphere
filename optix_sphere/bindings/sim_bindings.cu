@@ -28,6 +28,17 @@ void bind_sim(py::module_ &m) {
              "Example:\n"
              "    >>> mesh = Mesh.from_obj('sphere.obj')\n"
              "    >>> print(mesh.get_triangle_count())\n")
+        .def("to_obj", &Mesh::to_obj,
+             py::arg("obj_file_path"),
+             py::arg("mtl_file_path") = "",
+             "Export mesh to OBJ and MTL files.\n\n"
+             "Args:\n"
+             "    obj_file_path (str): Output OBJ path\n"
+             "    mtl_file_path (str, optional): Output MTL path. If empty,\n"
+             "        writes <obj_basename>.mtl in the same directory.\n\n"
+             "Example:\n"
+             "    >>> mesh = Mesh.from_obj('sphere.obj')\n"
+             "    >>> mesh.to_obj('sphere_copy.obj')\n")
         .def("copy", [](const Mesh& self) { return Mesh(self); },
              "Create a deep copy of the mesh.\n\n"
              "Returns:\n"
@@ -333,72 +344,82 @@ void bind_sim(py::module_ &m) {
              "    >>> sim.config.use_nee = True\n"
              "    >>> sim.config.random_seed = 12345\n"
              "    >>> result = sim.run(source)\n")
-        .def("add_material", &Simulator::add_material,
-             py::arg("material"),
-             "Add a material to the material pool.\n\n"
-             "Args:\n"
-             "    material: Material instance\n\n"
+        .def("get_material_count", &Simulator::get_material_count,
+             "Get the number of materials registered in the simulator.\n\n"
              "Returns:\n"
-             "    int: Index of the material in the pool\n\n"
+             "    int: Number of materials\n")
+        .def("get_material", &Simulator::get_material,
+             py::arg("material_name"),
+             "Get material instance by name.\n\n"
+             "Args:\n"
+             "    material_name (str): Material name\n\n"
+             "Returns:\n"
+             "    Material: Material instance\n\n"
+             "Example:\n"
+             "    >>> wall_mat = sim.get_material('wall')\n"
+             "    >>> wall_mat.reflectance = 0.99\n")
+        .def("set_material", &Simulator::set_material,
+             py::arg("material_name"), py::arg("material"), py::arg("sync_to_gpu") = false,
+             "Set material for a specific name.\n\n"
+             "Args:\n"
+             "    material_name (str): Name of material to set\n"
+             "    material (Material): New material instance\n"
+             "    sync_to_gpu (bool, optional): Whether to sync to GPU immediately. Defaults to False.\n\n"
+             "Example:\n"
+             "    >>> # Update and sync in one go\n"
+             "    >>> sim.set_material('wall', material.lambertian(0.95), sync_to_gpu=True)\n")
+        .def("get_material_names", &Simulator::get_material_names,
+             "Get all registered material names.\n\n"
+             "Returns:\n"
+             "    list[str]: List of material names\n")
+        .def("clear_materials", &Simulator::clear_materials,
+             "Clear all materials and mappings.\n\n"
+             "Example:\n"
+             "    >>> sim.clear_materials()\n")
+        .def("build_scene",
+             static_cast<void (Simulator::*)(
+                 const Scene&,
+                 const std::map<std::string, size_t>&,
+                 bool
+             )>(&Simulator::build_scene),
+             py::arg("cpu_scene"), py::arg("material_mapping"), py::arg("flip_detector_normal") = false,
+             "Build GPU scene from Scene using material pool indices.\n\n"
+             "Converts an independently created Scene into GPU acceleration structures.\n\n"
+             "Args:\n"
+             "    cpu_scene (Scene): CPU-side scene data\n"
+             "    material_mapping (dict[str, int]): Material name to pool index mapping\n"
+             "    flip_detector_normal (bool, optional): Flip detector normal direction. Defaults to False.\n\n"
              "Example:\n"
              "    >>> sim = Simulator()\n"
              "    >>> idx0 = sim.add_material(material.lambertian(0.98))\n"
              "    >>> idx1 = sim.add_material(material.detector())\n"
-             "    >>> print(idx0, idx1)  # 0 1\n")
-        .def("set_material", &Simulator::set_material,
-             py::arg("index"), py::arg("material"),
-             "Set material at a specific index in the pool.\n\n"
-             "Args:\n"
-             "    index (int): Material index\n"
-             "    material: New material instance\n\n"
-             "Example:\n"
-             "    >>> sim.set_material(0, material.lambertian(0.95))\n")
-        .def("get_material_pool_size", &Simulator::get_material_pool_size,
-             "Get the number of materials in the pool.\n\n"
-             "Returns:\n"
-             "    int: Number of materials\n\n"
-             "Example:\n"
-             "    >>> size = sim.get_material_pool_size()\n")
-        .def("get_material", &Simulator::get_material,
-             py::arg("index"),
-             "Get material at a specific index.\n\n"
-             "Args:\n"
-             "    index (int): Material index\n\n"
-             "Returns:\n"
-             "    Material: Material instance\n\n"
-             "Example:\n"
-             "    >>> mat = sim.get_material(0)\n")
-        .def("clear_materials", &Simulator::clear_materials,
-             "Clear all materials from the pool.\n\n"
-             "Example:\n"
-             "    >>> sim.clear_materials()\n")
+             "    >>> mapping = {'wall': idx0, 'detector': idx1}\n"
+             "    >>> sim.build_scene(scene, mapping)\n")
         .def("build_scene",
-             &Simulator::build_scene,
-             py::arg("cpu_scene"), py::arg("material_mapping"), py::arg("flip_detector_normal") = false,
-             "Build GPU scene from Scene.\n\n"
-             "Converts an independently created Scene into GPU acceleration structures.\n\n"
+             static_cast<void (Simulator::*)(
+                 const Scene&,
+                 const std::map<std::string, std::shared_ptr<Material>>&,
+                 bool
+             )>(&Simulator::build_scene),
+             py::arg("cpu_scene"),
+             py::arg("materials"),
+             py::arg("flip_detector_normal") = false,
+             "Build GPU scene with direct material mapping (recommended).\n\n"
              "Args:\n"
              "    cpu_scene (Scene): CPU-side scene data\n"
-             "    materials (dict[str, MaterialFactory]): Material name to factory mapping\n"
-             "    flip_detector_normal (bool, optional): Flip detector normal direction. Defaults to False.\n"
-             "                                           Set to True if mesh has inverted detector normals.\n\n"
+             "    materials (dict[str, Material]): Material name to Material object\n"
+             "    flip_detector_normal (bool): Flip detector normal if needed\n\n"
              "Example:\n"
-             "    >>> from optix_sphere import Scene, Simulator, material\n"
-             "    >>> \n"
-             "    >>> # Load scene independently\n"
-             "    >>> scene = Scene.from_obj('sphere.obj')\n"
-             "    >>> print(scene.get_material_names())\n"
-             "    >>> \n"
-             "    >>> # Prepare materials\n"
              "    >>> materials = {\n"
-             "    ...     'wall': material.lambertian(0.98),\n"
-             "    ...     'detector': material.detector()\n"
+             "    ...     'wall': osg.material.lambertian(0.98),\n"
+             "    ...     'detector': osg.material.detector(na=0.37)\n"
              "    ... }\n"
+             "    >>> sim.build_scene(scene, materials)\n"
              "    >>> \n"
-             "    >>> # Build GPU scene (flip detector normal if needed)\n"
-             "    >>> sim = Simulator()\n"
-             "    >>> sim.build_scene(scene, materials, flip_detector_normal=True)\n"
-             "    >>> result = sim.run(source, config)")
+             "    >>> # Get material index for dynamic updates\n"
+             "    >>> wall_idx = sim.get_material_index('wall')\n"
+             "    >>> sim.set_material(wall_idx, osg.material.lambertian(0.99))\n"
+             "    >>> sim.update_materials()\n")
         .def("run", static_cast<SimulationResult (Simulator::*)(phonder::PhotonSource&)>(&Simulator::run),
              py::arg("photon_source"),
              "Run Monte Carlo simulation using a procedural photon source.\n\n"
@@ -428,6 +449,23 @@ void bind_sim(py::module_ &m) {
              "    >>> batch = generate_photons(source, 1000000)\n"
              "    >>> result = sim.run(batch)\n")
         .def("get_detector_total_area", &Simulator::get_detector_total_area)
-        .def("update_materials", &Simulator::update_materials, "Update materials from pool to GPU");
+        .def("sync_to_gpu", &Simulator::sync_to_gpu, "Sync materials from CPU to GPU")
+        .def("get_material_index", &Simulator::get_material_index,
+             py::arg("material_name"),
+             "Get material pool index by name.\n\n"
+             "Args:\n"
+             "    material_name (str): Material name\n\n"
+             "Returns:\n"
+             "    int: Material pool index\n\n"
+             "Example:\n"
+             "    >>> wall_idx = sim.get_material_index('wall')\n"
+             "    >>> sim.set_material(wall_idx, osg.material.lambertian(0.99))\n")
+        .def("get_material_indices", &Simulator::get_material_indices,
+             "Get all material name to index mappings.\n\n"
+             "Returns:\n"
+             "    dict[str, int]: Material name to pool index mapping\n\n"
+             "Example:\n"
+             "    >>> indices = sim.get_material_indices()\n"
+             "    >>> print(indices)  # {'wall': 0, 'detector': 1}\n");
 
 }

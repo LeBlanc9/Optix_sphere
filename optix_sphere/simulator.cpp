@@ -31,37 +31,34 @@ Simulator::Simulator(int device_id) : pimpl_(std::make_unique<Pimpl>(device_id))
 
 Simulator::~Simulator() = default;
 
-size_t Simulator::add_material(std::shared_ptr<Material> material) {
-    material_pool_.push_back(material);
-    return material_pool_.size() - 1;
-}
-
-void Simulator::set_material(size_t index, std::shared_ptr<Material> material) {
-    if (index >= material_pool_.size()) {
-        throw std::runtime_error(
-            "Material index " + std::to_string(index) +
-            " out of range (pool size: " + std::to_string(material_pool_.size()) + ")"
-        );
-    }
-    material_pool_[index] = material;
-}
-
-size_t Simulator::get_material_pool_size() const {
+size_t Simulator::get_material_count() const {
     return material_pool_.size();
 }
 
-std::shared_ptr<Material> Simulator::get_material(size_t index) const {
-    if (index >= material_pool_.size()) {
-        throw std::runtime_error(
-            "Material index " + std::to_string(index) +
-            " out of range (pool size: " + std::to_string(material_pool_.size()) + ")"
-        );
-    }
+std::shared_ptr<Material> Simulator::get_material(const std::string& material_name) const {
+    size_t index = get_material_index(material_name);
     return material_pool_[index];
 }
 
 void Simulator::clear_materials() {
     material_pool_.clear();
+    material_name_to_index_.clear();
+}
+
+void Simulator::set_material(const std::string& material_name, std::shared_ptr<Material> material, bool sync_to_gpu) {
+    size_t index = get_material_index(material_name); // This will throw if not found
+    material_pool_[index] = material;
+    if (sync_to_gpu) {
+        this->sync_to_gpu();
+    }
+}
+
+std::vector<std::string> Simulator::get_material_names() const {
+    std::vector<std::string> names;
+    for (const auto& [name, _] : material_name_to_index_) {
+        names.push_back(name);
+    }
+    return names;
 }
 
 void Simulator::build_scene(
@@ -69,64 +66,102 @@ void Simulator::build_scene(
     const std::map<std::string, size_t>& material_mapping,
     bool flip_detector_normal
 ) {
-    spdlog::info("Building GPU scene from Scene with material pool...");
+    // This private method is for low-level mapping. 
+    // Usually called by the public build_scene(scene, materials_dict)
+    spdlog::info("Building GPU scene from Scene with material mapping index...");
 
-    // 验证 material_pool 不为空
     if (material_pool_.empty()) {
         throw std::runtime_error("material_pool is empty. Please add materials before building scene.");
     }
 
-    // 验证 material_mapping 中的所有索引都有效
-    for (const auto& [name, idx] : material_mapping) {
-        if (idx >= material_pool_.size()) {
-            throw std::runtime_error(
-                "Material mapping for '" + name + "' points to invalid pool index " +
-                std::to_string(idx) + " (pool size: " + std::to_string(material_pool_.size()) + ")"
-            );
-        }
-    }
-
     // Create DeviceScene
     pimpl_->scene_ = std::make_unique<DeviceScene>(pimpl_->context_);
-
-    // Get mesh data
     const Mesh& mesh = scene.get_mesh();
 
-    // 验证 mesh 中的所有材质名称都有映射
+    // Verify mapping
     for (const auto& mat_name : mesh.material_names) {
         if (material_mapping.find(mat_name) == material_mapping.end()) {
-            throw std::runtime_error(
-                "Mesh material '" + mat_name + "' not found in material_mapping"
-            );
+             throw std::runtime_error("Mesh material '" + mat_name + "' missing mapping");
         }
     }
 
-    // Build GPU scene with material pool and mapping
     pimpl_->scene_->build(mesh, material_pool_, material_mapping);
-
-    // Flip detector normal if requested
-    if (flip_detector_normal) {
-        spdlog::info("Flipping detector normal direction");
-        pimpl_->scene_->flip_detector_normal();
-    }
-
-    spdlog::info("✅ GPU scene built successfully.");
-
-    // Create the path tracer
+    if (flip_detector_normal) pimpl_->scene_->flip_detector_normal();
     pimpl_->create_tracer();
 }
 
-void Simulator::update_materials() {
-    if (!pimpl_->scene_is_built_ || !pimpl_->scene_) {
-        throw std::runtime_error("Cannot update materials before scene is built. Call 'build_scene' first.");
+void Simulator::build_scene(
+    const Scene& scene,
+    const std::map<std::string, std::shared_ptr<Material>>& materials,
+    bool flip_detector_normal
+) {
+    spdlog::info("Building GPU scene with direct material mapping...");
+
+    material_pool_.clear();
+    material_name_to_index_.clear();
+    std::map<std::string, size_t> material_mapping;
+
+    const Mesh& mesh = scene.get_mesh();
+    auto default_mats = material::get_default_materials();
+
+    // 1. Process requested materials first to maintain user order
+    for (const auto& [name, mat] : materials) {
+        size_t idx = material_pool_.size();
+        material_pool_.push_back(mat);
+        material_mapping[name] = idx;
+        material_name_to_index_[name] = idx;
+        spdlog::info("Registered material '{}' -> pool[{}]", name, idx);
     }
 
-    spdlog::info("🔄 Updating materials from pool (size: {})", material_pool_.size());
+    // 2. Validate against mesh requirement and fill missing ones
+    for (const auto& mesh_mat_name : mesh.material_names) {
+        if (material_mapping.find(mesh_mat_name) == material_mapping.end()) {
+            spdlog::warn("⚠️ Material '{}' used in mesh but not provided in mapping!", mesh_mat_name);
+            
+            std::shared_ptr<Material> fallback_mat;
+            // Try to find a sensible default by name, otherwise use Absorber
+            if (default_mats.count(mesh_mat_name)) {
+                spdlog::info("   Using default factory for '{}'", mesh_mat_name);
+                fallback_mat = default_mats[mesh_mat_name]();
+            } else {
+                spdlog::warn("   No default found for '{}', using black Absorber.", mesh_mat_name);
+                fallback_mat = std::make_shared<AbsorberMaterial>();
+            }
+
+            size_t idx = material_pool_.size();
+            material_pool_.push_back(fallback_mat);
+            material_mapping[mesh_mat_name] = idx;
+            material_name_to_index_[mesh_mat_name] = idx;
+        }
+    }
+
+    // Call the base build implementation
+    this->build_scene(scene, material_mapping, flip_detector_normal);
+}
+
+size_t Simulator::get_material_index(const std::string& material_name) const {
+    auto it = material_name_to_index_.find(material_name);
+    if (it == material_name_to_index_.end()) {
+        throw std::runtime_error("Material '" + material_name + "' not found");
+    }
+    return it->second;
+}
+
+std::map<std::string, size_t> Simulator::get_material_indices() const {
+    return material_name_to_index_;
+}
+
+void Simulator::sync_to_gpu() {
+    if (!pimpl_->scene_is_built_ || !pimpl_->scene_) {
+        throw std::runtime_error("Cannot sync materials before scene is built. Call 'build_scene' first.");
+    }
+
+    spdlog::info("🔄 Syncing materials to GPU (pool size: {})", material_pool_.size());
 
     // 同步 material_pool 到 DeviceScene
     pimpl_->scene_->update_from_pool(material_pool_);
 
-    spdlog::info("✅ Materials updated successfully.");
+    spdlog::info("✅ Materials synced successfully.");
 }
 
 SimulationResult Simulator::run(const phonder::PhotonBatch& source_batch) {

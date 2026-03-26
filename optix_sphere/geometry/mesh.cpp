@@ -3,10 +3,127 @@
 #include <algorithm>
 #include <set>
 #include <cmath>
+#include <fstream>
+#include <iomanip>
+#include <stdexcept>
 #include <spdlog/spdlog.h>
+
+namespace {
+
+std::string get_dirname(const std::string& path) {
+    const size_t pos = path.find_last_of("/\\");
+    if (pos == std::string::npos) {
+        return "";
+    }
+    return path.substr(0, pos + 1);
+}
+
+std::string get_basename(const std::string& path) {
+    const size_t pos = path.find_last_of("/\\");
+    if (pos == std::string::npos) {
+        return path;
+    }
+    return path.substr(pos + 1);
+}
+
+std::string strip_extension(const std::string& filename) {
+    const size_t pos = filename.find_last_of('.');
+    if (pos == std::string::npos) {
+        return filename;
+    }
+    return filename.substr(0, pos);
+}
+
+}  // namespace
 
 Mesh Mesh::from_obj(const std::string& file_path) {
     return ObjLoader::load_obj(file_path);
+}
+
+void Mesh::to_obj(const std::string& obj_file_path, const std::string& mtl_file_path) const {
+    if (obj_file_path.empty()) {
+        throw std::invalid_argument("OBJ output path cannot be empty");
+    }
+
+    const std::string obj_dir = get_dirname(obj_file_path);
+    const std::string obj_name = get_basename(obj_file_path);
+    const std::string default_mtl_name = strip_extension(obj_name) + ".mtl";
+
+    const std::string final_mtl_path = mtl_file_path.empty() ? (obj_dir + default_mtl_name) : mtl_file_path;
+    const std::string mtl_ref_name = mtl_file_path.empty() ? default_mtl_name : get_basename(final_mtl_path);
+
+    std::ofstream obj_out(obj_file_path);
+    if (!obj_out.is_open()) {
+        throw std::runtime_error("Failed to open OBJ file for writing: " + obj_file_path);
+    }
+
+    obj_out << "# Exported by optix_sphere::Mesh\n";
+    if (!material_names.empty()) {
+        obj_out << "mtllib " << mtl_ref_name << "\n";
+    }
+    obj_out << "\n";
+    obj_out << std::fixed << std::setprecision(9);
+
+    for (const auto& v : vertices) {
+        obj_out << "v " << v.x << " " << v.y << " " << v.z << "\n";
+    }
+
+    const bool has_normals = normals.size() == vertices.size() && !normals.empty();
+    if (has_normals) {
+        for (const auto& n : normals) {
+            obj_out << "vn " << n.x << " " << n.y << " " << n.z << "\n";
+        }
+    }
+
+    obj_out << "\n";
+    int current_material = -1;
+    for (size_t tri_idx = 0; tri_idx < indices.size(); ++tri_idx) {
+        int mat_idx = 0;
+        if (tri_idx < triangle_materials.size()) {
+            mat_idx = triangle_materials[tri_idx];
+        }
+
+        if (!material_names.empty() && mat_idx >= 0 && mat_idx < static_cast<int>(material_names.size()) && mat_idx != current_material) {
+            obj_out << "usemtl " << material_names[mat_idx] << "\n";
+            current_material = mat_idx;
+        }
+
+        const uint3& tri = indices[tri_idx];
+        const unsigned int i0 = tri.x + 1;
+        const unsigned int i1 = tri.y + 1;
+        const unsigned int i2 = tri.z + 1;
+
+        if (has_normals) {
+            obj_out << "f "
+                    << i0 << "//" << i0 << " "
+                    << i1 << "//" << i1 << " "
+                    << i2 << "//" << i2 << "\n";
+        } else {
+            obj_out << "f " << i0 << " " << i1 << " " << i2 << "\n";
+        }
+    }
+
+    obj_out.close();
+
+    if (!material_names.empty()) {
+        std::ofstream mtl_out(final_mtl_path);
+        if (!mtl_out.is_open()) {
+            throw std::runtime_error("Failed to open MTL file for writing: " + final_mtl_path);
+        }
+
+        mtl_out << "# Exported by optix_sphere::Mesh\n\n";
+        mtl_out << std::fixed << std::setprecision(6);
+        for (const auto& mat_name : material_names) {
+            mtl_out << "newmtl " << mat_name << "\n";
+            mtl_out << "Ka 0.000000 0.000000 0.000000\n";
+            mtl_out << "Kd 0.800000 0.800000 0.800000\n";
+            mtl_out << "Ks 0.000000 0.000000 0.000000\n";
+            mtl_out << "Ns 0.000000\n";
+            mtl_out << "d 1.000000\n\n";
+        }
+    }
+
+    spdlog::info("Exported mesh to OBJ '{}' and MTL '{}'", obj_file_path, final_mtl_path);
 }
 
 std::pair<float3, float3> Mesh::get_bounds() const {

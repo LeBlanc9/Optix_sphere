@@ -108,6 +108,21 @@ SimulationResult Simulator::run(int num_photons) {
     return run(input_batch);
 }
 
+SimulationResult Simulator::run(const std::shared_ptr<PhotonSource>& source, int num_photons) {
+    if (!source) {
+        throw std::runtime_error("Photon source is null");
+    }
+
+    PhotonBatch input_batch;
+    source->generate(
+        input_batch,
+        num_photons,
+        config_.seed ? config_.seed : static_cast<unsigned long long>(std::time(nullptr))
+    );
+
+    return run(input_batch);
+}
+
 SimulationResult Simulator::run(const PhotonBatch& input_batch) {
     // Simply call the runner - it handles all device operations
     return run_voxel_simulation(
