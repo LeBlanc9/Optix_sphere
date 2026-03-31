@@ -118,7 +118,8 @@ void DeviceScene::build(
         }
 
         materials_[i] = material_pool[pool_idx];
-        spdlog::info("Material [{}] '{}' -> pool[{}]", i, mesh_mat_name, pool_idx);
+        spdlog::info("Material [{}] '{}' -> pool[{}] : {}", 
+                     i, mesh_mat_name, pool_idx, materials_[i]->description());
     }
 
     // 1. Upload vertex and index data to GPU
@@ -279,7 +280,8 @@ void DeviceScene::update_from_pool(const std::vector<std::shared_ptr<Material>>&
         }
 
         materials_[i] = material_pool[pool_idx];
-        spdlog::info("  Updated material [{}] '{}' from pool[{}]", i, mesh_mat_name, pool_idx);
+        spdlog::info("  Updated material [{}] '{}' from pool[{}] : {}", 
+                     i, mesh_mat_name, pool_idx, materials_[i]->description());
     }
 
     spdlog::info("✅ Materials updated from pool");

@@ -29,6 +29,9 @@ public:
 
     // Write SBT data to the provided buffer
     virtual void write_sbt_data(void* dest) const = 0;
+
+    // Get a string description of the material parameters
+    virtual std::string description() const = 0;
 };
 
 // Type alias for material factory function
@@ -64,6 +67,9 @@ public:
     std::string get_shadow_kernel_name() const override { return "__anyhit__lambertian_shadow"; }
     size_t get_sbt_data_size() const override;
     void write_sbt_data(void* dest) const override;
+    std::string description() const override {
+        return "Lambertian(reflectance=" + std::to_string(reflectance_) + ")";
+    }
 
     // Accessors
     float get_reflectance() const { return reflectance_; }
@@ -101,6 +107,10 @@ public:
     std::string get_shadow_kernel_name() const override { return "__anyhit__lambertian_shadow"; }
     size_t get_sbt_data_size() const override;
     void write_sbt_data(void* dest) const override;
+    std::string description() const override {
+        return "SphericalLambertian(reflectance=" + std::to_string(reflectance_) +
+               ", center=[" + std::to_string(center_.x) + "," + std::to_string(center_.y) + "," + std::to_string(center_.z) + "])";
+    }
 
     // Accessors
     float get_reflectance() const { return reflectance_; }
@@ -142,6 +152,9 @@ public:
     std::string get_shadow_kernel_name() const override { return "__anyhit__detector_shadow"; }
     size_t get_sbt_data_size() const override;
     void write_sbt_data(void* dest) const override;
+    std::string description() const override {
+        return "Detector(na=" + std::to_string(na_) + ", n=" + std::to_string(n_) + ")";
+    }
 
     // Accessors
     float get_na() const { return na_; }
@@ -188,6 +201,7 @@ public:
     std::string get_shadow_kernel_name() const override { return "__anyhit__absorber_shadow"; }
     size_t get_sbt_data_size() const override;
     void write_sbt_data(void* dest) const override;
+    std::string description() const override { return "Absorber()"; }
 };
 
 /**
@@ -224,6 +238,11 @@ public:
     std::string get_shadow_kernel_name() const override { return "__anyhit__mixed_shadow"; }
     size_t get_sbt_data_size() const override;
     void write_sbt_data(void* dest) const override;
+    std::string description() const override {
+        return "Mixed(diffuse=" + std::to_string(diffuse_ratio_) +
+               ", specular=" + std::to_string(specular_ratio_) +
+               ", reflectance=" + std::to_string(reflectance_) + ")";
+    }
 
     // Accessors
     float get_diffuse_ratio() const { return diffuse_ratio_; }
@@ -276,6 +295,12 @@ public:
     std::string get_shadow_kernel_name() const override { return "__anyhit__mixed_shadow"; }
     size_t get_sbt_data_size() const override;
     void write_sbt_data(void* dest) const override;
+    std::string description() const override {
+        return "SphericalMixed(diffuse=" + std::to_string(diffuse_ratio_) +
+               ", specular=" + std::to_string(specular_ratio_) +
+               ", reflectance=" + std::to_string(reflectance_) +
+               ", center=[" + std::to_string(center_.x) + "," + std::to_string(center_.y) + "," + std::to_string(center_.z) + "])";
+    }
 
     // Accessors
     float get_diffuse_ratio() const { return diffuse_ratio_; }

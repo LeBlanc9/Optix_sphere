@@ -28,27 +28,24 @@ def test_na_values():
         print(f"Testing NA = {na:.2f}")
         print(f"{'='*70}\n")
 
-        # Create simulator
+        # Setup simulator
         sim = osg.Simulator()
         sim.config.num_rays = 1000000
         sim.config.max_bounces = 500
         sim.config.use_nee = True
 
-        # Setup material pool with detector having specific NA
-        idx_wall = sim.add_material(osg.material.lambertian(0.98))
-        idx_detector = sim.add_material(osg.material.detector(na=na, n=1.0))
-        idx_sample = sim.add_material(osg.material.lambertian(0.0))
+        # Build materials dictionary
+        mats = {
+            "wall_material": osg.material.lambertian(0.98),
+            "detector_material": osg.material.detector(na=na, n=1.0),
+            "sample_material": osg.material.lambertian(0.0)
+        }
 
         # Build scene
         scene = osg.Scene.from_obj(str(mesh_path))
-        material_mapping = {
-            "wall_material": idx_wall,
-            "detector_material": idx_detector,
-            "sample_material": idx_sample
-        }
 
         start_build = time.time()
-        sim.build_scene(scene, material_mapping)
+        sim.build_scene(scene, mats)
         build_time = time.time() - start_build
 
         # Setup photon source
