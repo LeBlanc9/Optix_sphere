@@ -153,11 +153,11 @@ Mesh Scene::get_merged_mesh() const {
         Mesh transformed = node.get_transformed_mesh();
 
         // Add materials from this node
-        for (const auto& mat_name : transformed.material_names) {
-            if (material_map.find(mat_name) == material_map.end()) {
-                int new_mat_idx = static_cast<int>(merged.material_names.size());
-                merged.material_names.push_back(mat_name);
-                material_map[mat_name] = new_mat_idx;
+        for (const auto& mat : transformed.materials) {
+            if (material_map.find(mat.name) == material_map.end()) {
+                int new_mat_idx = static_cast<int>(merged.materials.size());
+                merged.materials.push_back(mat);
+                material_map[mat.name] = new_mat_idx;
             }
         }
 
@@ -187,7 +187,7 @@ Mesh Scene::get_merged_mesh() const {
 
             // Map material index
             int old_mat_idx = transformed.triangle_materials[tri_idx];
-            const std::string& mat_name = transformed.material_names[old_mat_idx];
+            const std::string& mat_name = transformed.materials[old_mat_idx].name;
             int new_mat_idx = material_map[mat_name];
             merged.triangle_materials.push_back(new_mat_idx);
         }
@@ -214,8 +214,8 @@ std::vector<std::string> Scene::get_material_names() const {
 
     for (const auto& node : nodes_) {
         if (node.enabled) {
-            for (const auto& mat : node.mesh.material_names) {
-                unique_materials.insert(mat);
+            for (const auto& mat : node.mesh.materials) {
+                unique_materials.insert(mat.name);
             }
         }
     }
@@ -366,9 +366,9 @@ void Scene::info() const {
 
         // List materials and triangle counts
         if (node.mesh.get_material_count() > 0) {
-            for (const auto& mat_name : node.mesh.material_names) {
-                size_t mat_tri_count = node.mesh.get_triangle_count_by_material(mat_name);
-                spdlog::info("      - '{}': {} triangles", mat_name, mat_tri_count);
+            for (const auto& mat : node.mesh.materials) {
+                size_t mat_tri_count = node.mesh.get_triangle_count_by_material(mat.name);
+                spdlog::info("      - '{}': {} triangles", mat.name, mat_tri_count);
             }
         }
 

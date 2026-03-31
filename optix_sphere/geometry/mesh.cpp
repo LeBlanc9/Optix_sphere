@@ -58,7 +58,7 @@ void Mesh::to_obj(const std::string& obj_file_path, const std::string& mtl_file_
     }
 
     obj_out << "# Exported by optix_sphere::Mesh\n";
-    if (!material_names.empty()) {
+    if (!materials.empty()) {
         obj_out << "mtllib " << mtl_ref_name << "\n";
     }
     obj_out << "\n";
@@ -83,8 +83,8 @@ void Mesh::to_obj(const std::string& obj_file_path, const std::string& mtl_file_
             mat_idx = triangle_materials[tri_idx];
         }
 
-        if (!material_names.empty() && mat_idx >= 0 && mat_idx < static_cast<int>(material_names.size()) && mat_idx != current_material) {
-            obj_out << "usemtl " << material_names[mat_idx] << "\n";
+        if (!materials.empty() && mat_idx >= 0 && mat_idx < static_cast<int>(materials.size()) && mat_idx != current_material) {
+            obj_out << "usemtl " << materials[mat_idx].name << "\n";
             current_material = mat_idx;
         }
 
@@ -105,7 +105,7 @@ void Mesh::to_obj(const std::string& obj_file_path, const std::string& mtl_file_
 
     obj_out.close();
 
-    if (!material_names.empty()) {
+    if (!materials.empty()) {
         std::ofstream mtl_out(final_mtl_path);
         if (!mtl_out.is_open()) {
             throw std::runtime_error("Failed to open MTL file for writing: " + final_mtl_path);
@@ -113,11 +113,11 @@ void Mesh::to_obj(const std::string& obj_file_path, const std::string& mtl_file_
 
         mtl_out << "# Exported by optix_sphere::Mesh\n\n";
         mtl_out << std::fixed << std::setprecision(6);
-        for (const auto& mat_name : material_names) {
-            mtl_out << "newmtl " << mat_name << "\n";
-            mtl_out << "Ka 0.000000 0.000000 0.000000\n";
-            mtl_out << "Kd 0.800000 0.800000 0.800000\n";
-            mtl_out << "Ks 0.000000 0.000000 0.000000\n";
+        for (const auto& mat : materials) {
+            mtl_out << "newmtl " << mat.name << "\n";
+            mtl_out << "Ka " << mat.ambient.x << " " << mat.ambient.y << " " << mat.ambient.z << "\n";
+            mtl_out << "Kd " << mat.diffuse.x << " " << mat.diffuse.y << " " << mat.diffuse.z << "\n";
+            mtl_out << "Ks " << mat.specular.x << " " << mat.specular.y << " " << mat.specular.z << "\n";
             mtl_out << "Ns 0.000000\n";
             mtl_out << "d 1.000000\n\n";
         }
@@ -149,11 +149,12 @@ std::pair<float3, float3> Mesh::get_bounds() const {
 }
 
 int Mesh::find_material_index(const std::string& material_name) const {
-    auto it = std::find(material_names.begin(), material_names.end(), material_name);
-    if (it == material_names.end()) {
-        return -1;
+    for (size_t i = 0; i < materials.size(); ++i) {
+        if (materials[i].name == material_name) {
+            return static_cast<int>(i);
+        }
     }
-    return static_cast<int>(std::distance(material_names.begin(), it));
+    return -1;
 }
 
 size_t Mesh::get_triangle_count_by_material(const std::string& material_name) const {
@@ -205,7 +206,7 @@ Mesh Mesh::extract_mesh_by_material(const std::string& material_name) const {
     }
 
     Mesh result;
-    result.material_names = {material_name};
+    result.materials = {materials[material_index]};
 
     // Map old vertex index -> new vertex index
     std::map<unsigned int, unsigned int> vertex_map;
@@ -247,8 +248,8 @@ Mesh Mesh::extract_mesh_by_material(const std::string& material_name) const {
 std::map<std::string, Mesh> Mesh::split_by_material() const {
     std::map<std::string, Mesh> result;
 
-    for (const auto& material_name : material_names) {
-        result[material_name] = extract_mesh_by_material(material_name);
+    for (const auto& mat : materials) {
+        result[mat.name] = extract_mesh_by_material(mat.name);
     }
 
     spdlog::info("Split mesh into {} parts by material", result.size());
@@ -263,23 +264,23 @@ void Mesh::remove_mesh_by_material(const std::string& material_name) {
     }
 
     // Build new material list and index mapping
-    std::vector<std::string> new_material_names;
+    std::vector<MeshMaterial> new_materials;
     std::map<int, int> old_to_new_material_index;
 
-    for (size_t i = 0; i < material_names.size(); ++i) {
+    for (size_t i = 0; i < materials.size(); ++i) {
         if (static_cast<int>(i) != material_index) {
-            old_to_new_material_index[i] = new_material_names.size();
-            new_material_names.push_back(material_names[i]);
+            old_to_new_material_index[i] = new_materials.size();
+            new_materials.push_back(materials[i]);
         }
     }
 
-    if (new_material_names.empty()) {
+    if (new_materials.empty()) {
         spdlog::warn("Removing material '{}' would result in empty mesh, clearing all data", material_name);
         vertices.clear();
         normals.clear();
         indices.clear();
         triangle_materials.clear();
-        material_names.clear();
+        materials.clear();
         return;
     }
 
@@ -327,7 +328,7 @@ void Mesh::remove_mesh_by_material(const std::string& material_name) {
     normals = std::move(new_normals);
     indices = std::move(new_indices);
     triangle_materials = std::move(new_triangle_materials);
-    material_names = std::move(new_material_names);
+    materials = std::move(new_materials);
 
     spdlog::debug("Removed material '{}': mesh now has {} vertices, {} triangles",
                  material_name, vertices.size(), indices.size());
@@ -339,20 +340,21 @@ void Mesh::info() const {
     spdlog::info("========================================");
     spdlog::info("Vertices: {}", vertices.size());
     spdlog::info("Triangles: {}", indices.size());
-    spdlog::info("Materials: {}", material_names.size());
+    spdlog::info("Materials: {}", materials.size());
     spdlog::info("");
 
-    if (!material_names.empty()) {
+    if (!materials.empty()) {
         spdlog::info("----------------------------------------");
         spdlog::info("Materials:");
         spdlog::info("----------------------------------------");
 
-        for (const auto& mat_name : material_names) {
-            size_t tri_count = get_triangle_count_by_material(mat_name);
-            size_t vert_count = get_vertex_count_by_material(mat_name);
+        for (const auto& mat : materials) {
+            size_t tri_count = get_triangle_count_by_material(mat.name);
+            size_t vert_count = get_vertex_count_by_material(mat.name);
             float percentage = (indices.size() > 0) ? (100.0f * tri_count / indices.size()) : 0.0f;
 
-            spdlog::info("  '{}'", mat_name);
+            spdlog::info("  '{}' (Kd: {:.2f}, {:.2f}, {:.2f})", 
+                         mat.name, mat.diffuse.x, mat.diffuse.y, mat.diffuse.z);
             spdlog::info("    Triangles: {} ({:.1f}%)", tri_count, percentage);
             spdlog::info("    Vertices: {}", vert_count);
         }

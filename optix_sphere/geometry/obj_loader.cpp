@@ -48,10 +48,18 @@ Mesh ObjLoader::load_obj(const std::string& filepath) {
 
         // Check if we've already added this material
         if (material_name_to_index.find(mat_name) == material_name_to_index.end()) {
-            int new_index = static_cast<int>(mesh.material_names.size());
+            int new_index = static_cast<int>(mesh.materials.size());
             material_name_to_index[mat_name] = new_index;
-            mesh.material_names.push_back(mat_name);
-            spdlog::debug("Material '{}' -> index {}", mat_name, new_index);
+            
+            MeshMaterial mesh_mat;
+            mesh_mat.name = mat_name;
+            mesh_mat.diffuse = make_float3(obj_mat.diffuse[0], obj_mat.diffuse[1], obj_mat.diffuse[2]);
+            mesh_mat.ambient = make_float3(obj_mat.ambient[0], obj_mat.ambient[1], obj_mat.ambient[2]);
+            mesh_mat.specular = make_float3(obj_mat.specular[0], obj_mat.specular[1], obj_mat.specular[2]);
+            
+            mesh.materials.push_back(mesh_mat);
+            spdlog::debug("Material '{}' -> index {} (Kd: {}, {}, {})", 
+                         mat_name, new_index, mesh_mat.diffuse.x, mesh_mat.diffuse.y, mesh_mat.diffuse.z);
         }
     }
 
@@ -84,7 +92,7 @@ Mesh ObjLoader::load_obj(const std::string& filepath) {
             } else {
                 // Face has no material assigned in OBJ file
                 // Use the first available material as default
-                if (!mesh.material_names.empty()) {
+                if (!mesh.materials.empty()) {
                     mat_index = 0;  // Use first material
                 }
                 // Only warn once (on first occurrence)

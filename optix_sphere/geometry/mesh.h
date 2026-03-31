@@ -6,14 +6,24 @@
 #include <cuda_runtime.h>
 
 /**
+ * @brief Material information for a mesh
+ */
+struct MeshMaterial {
+    std::string name;
+    float3 diffuse = {0.8f, 0.8f, 0.8f};
+    float3 ambient = {0.0f, 0.0f, 0.0f};
+    float3 specular = {0.0f, 0.0f, 0.0f};
+};
+
+/**
  * @brief Triangle mesh with material information
  */
 struct Mesh {
     std::vector<float3> vertices;           // Vertex positions
     std::vector<float3> normals;            // Vertex normals
     std::vector<uint3> indices;             // Triangle indices (each uint3 = one triangle's 3 vertex indices)
-    std::vector<int> triangle_materials;    // Material index per triangle (index into material_names)
-    std::vector<std::string> material_names; // Material name list (e.g., ["wall", "detector", ...])
+    std::vector<int> triangle_materials;    // Material index per triangle (index into materials)
+    std::vector<MeshMaterial> materials;    // Material properties list
 
     // Constructors
     Mesh() = default;
@@ -39,7 +49,7 @@ struct Mesh {
 
     size_t get_vertex_count() const { return vertices.size(); }
 
-    size_t get_material_count() const { return material_names.size(); }
+    size_t get_material_count() const { return materials.size(); }
 
     std::pair<float3, float3> get_bounds() const;
 

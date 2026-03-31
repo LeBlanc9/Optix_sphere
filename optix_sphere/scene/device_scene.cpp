@@ -97,12 +97,15 @@ void DeviceScene::build(
 
     // 保存映射关系和mesh材质名称
     material_mapping_ = material_mapping;
-    mesh_material_names_ = mesh.material_names;
+    mesh_material_names_.clear();
+    for (const auto& mat : mesh.materials) {
+        mesh_material_names_.push_back(mat.name);
+    }
 
     // 从 material_pool 构建 materials_（按照 mesh 材质顺序）
     materials_.resize(mesh.get_material_count());
-    for (size_t i = 0; i < mesh.material_names.size(); ++i) {
-        const std::string& mesh_mat_name = mesh.material_names[i];
+    for (size_t i = 0; i < mesh.materials.size(); ++i) {
+        const std::string& mesh_mat_name = mesh.materials[i].name;
         auto it = material_mapping.find(mesh_mat_name);
         if (it == material_mapping.end()) {
             throw std::runtime_error("Mesh material '" + mesh_mat_name + "' not found in material_mapping");

@@ -79,9 +79,9 @@ void Simulator::build_scene(
     const Mesh& mesh = scene.get_mesh();
 
     // Verify mapping
-    for (const auto& mat_name : mesh.material_names) {
-        if (material_mapping.find(mat_name) == material_mapping.end()) {
-             throw std::runtime_error("Mesh material '" + mat_name + "' missing mapping");
+    for (const auto& mat : mesh.materials) {
+        if (material_mapping.find(mat.name) == material_mapping.end()) {
+             throw std::runtime_error("Mesh material '" + mat.name + "' missing mapping");
         }
     }
 
@@ -114,24 +114,24 @@ void Simulator::build_scene(
     }
 
     // 2. Validate against mesh requirement and fill missing ones
-    for (const auto& mesh_mat_name : mesh.material_names) {
-        if (material_mapping.find(mesh_mat_name) == material_mapping.end()) {
-            spdlog::warn("⚠️ Material '{}' used in mesh but not provided in mapping!", mesh_mat_name);
+    for (const auto& mesh_mat : mesh.materials) {
+        if (material_mapping.find(mesh_mat.name) == material_mapping.end()) {
+            spdlog::warn("⚠️ Material '{}' used in mesh but not provided in mapping!", mesh_mat.name);
             
             std::shared_ptr<Material> fallback_mat;
             // Try to find a sensible default by name, otherwise use Absorber
-            if (default_mats.count(mesh_mat_name)) {
-                spdlog::info("   Using default factory for '{}'", mesh_mat_name);
-                fallback_mat = default_mats[mesh_mat_name]();
+            if (default_mats.count(mesh_mat.name)) {
+                spdlog::info("   Using default factory for '{}'", mesh_mat.name);
+                fallback_mat = default_mats[mesh_mat.name]();
             } else {
-                spdlog::warn("   No default found for '{}', using black Absorber.", mesh_mat_name);
+                spdlog::warn("   No default found for '{}', using black Absorber.", mesh_mat.name);
                 fallback_mat = std::make_shared<AbsorberMaterial>();
             }
 
             size_t idx = material_pool_.size();
             material_pool_.push_back(fallback_mat);
-            material_mapping[mesh_mat_name] = idx;
-            material_name_to_index_[mesh_mat_name] = idx;
+            material_mapping[mesh_mat.name] = idx;
+            material_name_to_index_[mesh_mat.name] = idx;
         }
     }
 

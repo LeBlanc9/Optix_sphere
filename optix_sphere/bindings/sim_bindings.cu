@@ -57,8 +57,13 @@ void bind_sim(py::module_ &m) {
              "List of triangle indices (uint3)")
         .def_readonly("triangle_materials", &Mesh::triangle_materials,
              "List of material indices per triangle (int)")
-        .def_readonly("material_names", &Mesh::material_names,
-             "List of material names (str)")
+        .def_property_readonly("material_names", [](const Mesh& self) {
+            std::vector<std::string> names;
+            for (const auto& mat : self.materials) {
+                names.push_back(mat.name);
+            }
+            return names;
+        }, "List of material names (str)")
         .def("get_triangle_count", &Mesh::get_triangle_count,
              "Get number of triangles in the mesh")
         .def("get_vertex_count", &Mesh::get_vertex_count,
